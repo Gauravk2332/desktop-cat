@@ -12,6 +12,7 @@ Sounds:
   - meow_short.wav: 300→500Hz rising "mrr?" ~0.4s
   - meow_long.wav: 600→350Hz descending "meow" ~0.8s
   - meow_greeting.wav: 200→500Hz rising chirpy "hmrr" ~0.4s (welcoming)
+  - meow_plaintive.wav: 500→250Hz descending "meoow" ~0.7s (sad/longing)
   - chirp.wav: Bird-like high-pitched ~0.15s (prey excitement)
   - chatter.wav: Teeth-clicking rapid bursts ~0.3s (hunting frustration)
   - footstep.wav: 80Hz thud ~0.12s
@@ -119,6 +120,22 @@ def gen_meow_greeting():
         s += math.sin(2 * math.pi * freq * 1.5 * t) * 0.3
         samples.append(MAX_AMP * 0.65 * env * s)
     return apply_fade(samples, fade_out=0.05)
+
+
+def gen_meow_plaintive():
+    """Descending sad meow ~0.7s, plaintive/longing."""
+    n = int(SAMPLE_RATE * 0.7)
+    samples = []
+    for i in range(n):
+        t = i / SAMPLE_RATE
+        vib = 1.0 + 0.02 * math.sin(2 * math.pi * 4 * t)
+        freq = 500 * vib - 250 * (i / n)
+        env = 0.4 + 0.6 * math.sin(math.pi * i / n)
+        s = math.sin(2 * math.pi * freq * t) * 0.5
+        s += math.sin(2 * math.pi * freq * 1.3 * t) * 0.25
+        s += math.sin(2 * math.pi * freq * 0.5 * t) * 0.15
+        samples.append(MAX_AMP * 0.65 * env * s)
+    return apply_fade(samples, fade_out=0.08)
 
 
 def gen_chirp():
@@ -321,6 +338,7 @@ GENERATORS = [
     ("growl.wav", gen_growl),
     ("yowl.wav", gen_yowl),
     ("meow_greeting.wav", gen_meow_greeting),
+    ("meow_plaintive.wav", gen_meow_plaintive),
     ("meow_short.wav", gen_meow_short),
     ("meow_long.wav", gen_meow_long),
     ("footstep.wav", gen_footstep),

@@ -945,13 +945,11 @@ class Engine:
 
         elif action == "MEOW":
             sound_type = params.get("type", "greeting") if params else "greeting"
-            try:
+            known_meows = {"short", "long", "greeting", "plaintive"}
+            if sound_type in known_meows:
                 self.sound.play(f"meow_{sound_type}")
-            except Exception:
-                try:
-                    self.sound.play("meow_short")
-                except Exception:
-                    pass
+            else:
+                self.sound.play("meow_short")
 
         elif action == "GROOM":
             cat["reaction_type"] = "groom"
