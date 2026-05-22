@@ -169,6 +169,17 @@ BLINK_INTERVAL_MAX = 6.0
 BLINK_DURATION     = 0.10
 
 
+# ─── Sprite Rendering ─────────────────────────────────────────────────────
+SPRITE_SIZE = 400                     # px — native frame dimension
+CAT_SIZE_DEFAULT = 200                 # px — default cat height on screen
+CAT_SIZE_MIN = 120                     # px — minimum scaled size
+CAT_SIZE_MAX = 350                     # px — maximum scaled size
+SHADOW_OPACITY = 0.10                  # drop shadow opacity (0.0-1.0)
+SILHOUETTE_SHADOW = True               # extra blur layer behind cat
+CROSSFADE_MS = 200                     # transition crossfade duration
+RENDERER_BACKEND = "sprite"             # "sprite" | "qpainter" (fallback)
+
+
 # ─── Multi-Pet ────────────────────────────────────────────────────────
 MAX_CATS = 3                    # max number of cats (configurable)
 DEFAULT_CATS = 1                # number of cats at fresh install
