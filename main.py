@@ -70,16 +70,17 @@ def main():
         logger.critical("Engine creation failed: %s", exc_info=True)
         sys.exit(1)
 
-    # 4. Create AI cat agent
+    # 4. Create AI cat agent — remote LLM via clowbot proxy
     try:
         from behavior.agent import CatAgent
         agent = CatAgent(
-            backend="ollama",
-            ollama_model="llama3.2:1b",
+            backend="remote",
+            remote_api_url="http://100.66.197.23:18990/v1/chat/completions",
+            remote_model="deepseek-chat",
             decision_interval=2.0,
         )
         engine.set_agent(agent)
-        logger.info("CatAgent created (ollama / llama3.2:1b)")
+        logger.info("CatAgent created (remote / deepseek)")
     except Exception as e:
         logger.warning("CatAgent creation failed (non-fatal): %s", e)
         logger.info("Cat running without AI agent (fallback mode)")

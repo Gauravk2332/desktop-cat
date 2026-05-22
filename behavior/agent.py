@@ -185,14 +185,23 @@ What do you do? Respond with EXACTLY one line: ACTION <name> [params][/INST]"""
 
 
 def call_remote_api(context: str, api_url: str = "",
-                    api_key: str = "", model: str = "deepseek/deepseek-v4-flash",
-                    timeout: float = 5.0) -> Optional[str]:
+                    api_key: str = "", model: str = "deepseek-chat",
+                    timeout: float = 10.0) -> Optional[str]:
     """Call a remote API (OpenAI-compatible)."""
     import urllib.request
     import urllib.error
 
-    if not api_url or not api_key:
+    if not api_url:
         return None
+
+    prompt = f"""[INST]<<SYS>>
+{SYSTEM_PROMPT}
+<</SYS>>
+
+Current situation:
+{context}
+
+What do you do? Respond with EXACTLY one line: ACTION <name> [params][/INST]"""
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -207,13 +216,12 @@ def call_remote_api(context: str, api_url: str = "",
         "stop": ["\n"],
     }).encode()
 
-    req = urllib.request.Request(api_url, data, {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}",
-    })
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     try:
-        resp = urllib.request.urlopen(req, timeout=timeout)
+        resp = urllib.request.urlopen(urllib.request.Request(api_url, data, headers), timeout=timeout)
         result = json.loads(resp.read())
         return result["choices"][0]["message"]["content"].strip()
     except Exception as e:
