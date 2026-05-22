@@ -37,6 +37,7 @@ class BehaviorPlanner:
         self._activity_burst_start = None
         self._uncertainty_timer = 0.0
         self._uncertainty_cooldown = 0.0
+        self._patrol_idle_timer = 0.0
 
     def update(
         self,
@@ -266,6 +267,12 @@ class BehaviorPlanner:
         if random.random() < 0.05:
             return ("stare", False, 6)
 
+        # Idle patrol timer — walk around every 15-30s even when needs are fine
+        self._patrol_idle_timer += 0.05
+        if self._patrol_idle_timer > random.uniform(15.0, 30.0):
+            self._patrol_idle_timer = 0.0
+            return ("patrol", False, 6)
+
         # Default: passive sit
         return ("sit", False, 6)
 
@@ -290,3 +297,4 @@ class BehaviorPlanner:
         self._lull_timer = 0.0
         self._stare_timer = 0.0
         self._micro_timer = 0.0
+        self._patrol_idle_timer = 0.0
