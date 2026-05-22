@@ -26,6 +26,7 @@ import config
 from core.state import CatState
 import core.navigation as navigation
 from core.sound import SoundManager
+from core.navigation import _spawn_hearts
 
 
 class Engine:
@@ -245,6 +246,13 @@ class Engine:
         if s.purr_vibrate > 0:
             s.purr_vibrate = max(0.0, s.purr_vibrate - dt * 4.0)
 
+        # Hearts decay (on-pet animation)
+        for h in list(s.hearts):
+            h[2] -= dt  # lifetime
+            h[1] -= 40 * dt  # float upward
+            if h[2] <= 0:
+                s.hearts.remove(h)
+
         # Reaction timer
         if s.reaction_timer > 0:
             s.reaction_timer -= dt
@@ -322,6 +330,8 @@ class Engine:
                     self._trigger_purr()
                     self.sound.play("purr")
                     s.consecutive_pets += 1
+                # Spawn hearts on pet
+                _spawn_hearts(s)
 
         # Approach walk (mouse within 80px)
         if dist < 80 and s.state == config.STATE_SIT:

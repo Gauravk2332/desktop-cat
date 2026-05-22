@@ -24,10 +24,12 @@ def main():
     state = CatState()
 
     # 2. Create window (full-screen overlay, sets screen dimensions + cat pos)
+    #    Engine not yet created — pass None, engine sets itself on window later
     window = CatWindow(state)
 
     # 3. Create engine (references state + window)
     engine = Engine(state, window)
+    window.controls.engine = engine  # back-reference so controls can use engine
     engine.load_state()
 
     # 4. Pass state reference to API (for debug status)
@@ -39,7 +41,7 @@ def main():
 
     # 6. System tray
     from ui.tray import CatTrayIcon
-    tray = CatTrayIcon(app, state)
+    tray = CatTrayIcon(app, state, window)
     tray.show()
 
     # 7. Show window

@@ -9,9 +9,10 @@ logger = logging.getLogger(__name__)
 class CatTrayIcon:
     """System tray icon for desktop-cat."""
 
-    def __init__(self, app: QApplication, state):
+    def __init__(self, app: QApplication, state, window=None):
         self.app = app
         self.state = state
+        self.window = window
         self.tray = QSystemTrayIcon()
 
         # Load icon
@@ -29,9 +30,14 @@ class CatTrayIcon:
         # Signal
         self.tray.activated.connect(self._on_activated)
 
+        # Sync tray state with window visibility
+        if self.window is not None:
+            self.window.visibleChanged.connect(self._on_visibility_changed)
+
     def _build_menu(self):
         self.act_show = QAction("Show Cat", checkable=True)
         self.act_show.setChecked(True)
+        self.act_show.toggled.connect(self._on_show_toggled)
         self.menu.addAction(self.act_show)
         self.menu.addSeparator()
 
@@ -49,9 +55,19 @@ class CatTrayIcon:
         from ui.settings import SettingsDialog
         SettingsDialog.open()
 
+    def _on_show_toggled(self, checked: bool):
+        """Toggle window visibility from tray menu."""
+        if self.window is not None:
+            self.window.setVisible(checked)
+
+    def _on_visibility_changed(self, visible: bool):
+        """Sync tray check state when window visibility changes externally."""
+        self.act_show.setChecked(visible)
+
     def _on_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            pass  # Could toggle visibility
+            if self.window is not None:
+                self.window.setVisible(not self.window.isVisible())
 
     def show(self):
         if QSystemTrayIcon.isSystemTrayAvailable():
