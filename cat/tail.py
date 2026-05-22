@@ -10,8 +10,10 @@ import config
 from config import flip_x
 
 
-def draw_tail_sit(painter: QPainter, cx: float, cy: float, state) -> None:
+def draw_tail_sit(painter: QPainter, cx: float, cy: float, state,
+                  coat_index: int = 0) -> None:
     """Sitting tail with sinusoidal swish."""
+    coat = config.get_coat(coat_index)
     phase = state.tail_phase
     ts = math.sin(phase) * 12
     bx = int(cx + flip_x(-16, state.facing))
@@ -29,34 +31,44 @@ def draw_tail_sit(painter: QPainter, cx: float, cy: float, state) -> None:
         ex, ey,
     )
     painter.strokePath(path, QPen(
-        config.C_BODY, 5,
+        coat.body, 5,
         Qt.PenStyle.SolidLine,
         Qt.PenCapStyle.RoundCap,
     ))
 
 
-def draw_tail_walk(painter: QPainter, cx: float, cy: float, state) -> None:
-    """Walking tail — held up, slight sway."""
+def draw_tail_walk(painter: QPainter, cx: float, cy: float, state,
+                   coat_index: int = 0) -> None:
+    """Walking tail — held up, sinusoidal sway synchronized with gait."""
+    coat = config.get_coat(coat_index)
+    walk_frame = getattr(state, 'walk_frame', 0)
+    # Sinusoidal tail sway synchronized with gait
+    sway = math.sin(walk_frame * 0.785) * 6
+
     tx = int(cx + flip_x(-14, state.facing))
     ty = int(cy - 28)
+
+    # Tail tip sways horizontally with gait
+    tip_sway_x = int(cx + flip_x(-10, state.facing)) + int(flip_x(sway, state.facing))
 
     path = QPainterPath()
     path.moveTo(tx, ty)
     path.cubicTo(
         int(tx + flip_x(-12, state.facing)), int(ty - 15),
         int(tx + flip_x(-6, state.facing)), int(ty - 35),
-        int(tx + flip_x(-10, state.facing)), int(ty - 45),
+        tip_sway_x, int(ty - 45),
     )
     painter.strokePath(path, QPen(
-        config.C_BODY, 4,
+        coat.body, 4,
         Qt.PenStyle.SolidLine,
         Qt.PenCapStyle.RoundCap,
     ))
 
 
 def draw_tail_sleep(painter: QPainter, cx: float, cy: float, state,
-                    base_r: float, base_y: float) -> None:
+                    base_r: float, base_y: float, coat_index: int = 0) -> None:
     """Curled-around tail for sleep pose."""
+    coat = config.get_coat(coat_index)
     path = QPainterPath()
     tc_x = int(cx - base_r)
     tc_y = int(base_y)
@@ -67,7 +79,7 @@ def draw_tail_sleep(painter: QPainter, cx: float, cy: float, state,
         int(cx + flip_x(8, state.facing)), int(base_y - 15),
     )
     painter.strokePath(path, QPen(
-        config.C_BODY, 4,
+        coat.body, 4,
         Qt.PenStyle.SolidLine,
         Qt.PenCapStyle.RoundCap,
     ))

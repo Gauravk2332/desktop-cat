@@ -10,12 +10,12 @@ from config import flip_x
 
 
 def draw_eyes(painter: QPainter, cx: float, cy: float, head_y: float,
-              state) -> None:
+              state, coat_index: int = 0) -> None:
     """Main eye drawing — handles blink vs. open eyes with pupil tracking."""
     if state.blinking:
         _draw_blink_eyes(painter, cx, head_y, state)
     else:
-        _draw_open_eyes(painter, cx, head_y, state)
+        _draw_open_eyes(painter, cx, head_y, state, coat_index)
 
 
 def _draw_blink_eyes(painter: QPainter, cx: float, head_y: float,
@@ -31,8 +31,9 @@ def _draw_blink_eyes(painter: QPainter, cx: float, head_y: float,
 
 
 def _draw_open_eyes(painter: QPainter, cx: float, head_y: float,
-                    state) -> None:
-    """Open eyes with sclera, pupil, and mouse tracking."""
+                    state, coat_index: int = 0) -> None:
+    """Open eyes with sclera, iris, pupil, and mouse tracking."""
+    coat = config.get_coat(coat_index)
     for side in (-1, 1):
         ex = int(cx + flip_x(side * 6, state.facing))
         ey = int(head_y)
@@ -42,6 +43,16 @@ def _draw_open_eyes(painter: QPainter, cx: float, head_y: float,
         sc.addEllipse(ex - config.EYE_R, ey - config.EYE_R,
                        config.EYE_R * 2, config.EYE_R * 2)
         painter.fillPath(sc, config.C_EYE_WHITE)
+
+        # Iris ring (colored)
+        iris = QPainterPath()
+        iris.addEllipse(
+            int(ex - config.PUPIL_R - 1),
+            int(ey - config.PUPIL_R * 1.2 - 1),
+            int(config.PUPIL_R * 2 + 2),
+            int(config.PUPIL_R * 2.4 + 2),
+        )
+        painter.fillPath(iris, coat.eye)
 
         # Pupil with tracking offset
         px, py = state.eye_current
@@ -54,16 +65,17 @@ def _draw_open_eyes(painter: QPainter, cx: float, head_y: float,
             int(config.PUPIL_R * 2),
             int(config.PUPIL_R * 2.4),
         )
-        painter.fillPath(pp, config.C_PUPIL)
+        painter.fillPath(pp, coat.pupil)
 
 
 def draw_happy_eyes(painter: QPainter, cx: float, head_y: float,
-                    state) -> None:
+                    state, coat_index: int = 0) -> None:
     """Happy closed-eye arcs (inverted U shape)."""
+    coat = config.get_coat(coat_index)
     for side in (-1, 1):
         ex = int(cx + flip_x(side * 6, state.facing))
         ey = int(head_y)
         path = QPainterPath()
         path.moveTo(ex - 3, ey)
         path.cubicTo(ex - 2, ey - 2, ex + 2, ey - 2, ex + 3, ey)
-        painter.strokePath(path, QPen(config.C_PUPIL, 2))
+        painter.strokePath(path, QPen(coat.pupil, 2))

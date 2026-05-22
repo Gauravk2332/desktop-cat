@@ -5,6 +5,9 @@ No runtime changes. All values are final per session.
 """
 
 import os
+from dataclasses import dataclass, field
+from typing import Optional, List
+
 from PyQt6.QtGui import QColor, QFont
 
 DEBUG = False  # Set True for verbose logging during development
@@ -82,14 +85,7 @@ HOME_VISIT_COOLDOWN    = 90.0  # min seconds between home visits
 HOME_BOREDOM_THRESHOLD = 70.0  # boredom above this → go home nap
 
 # ─── Colors ───────────────────────────────────────────────────────────────
-C_BODY      = QColor(0x7C, 0x8E, 0x9E)   # steel gray-blue (Russian Blue)
-C_BELLY     = QColor(0xD4, 0xD9, 0xDE)   # light warm gray
 C_SHADOW    = QColor(0, 0, 0, 25)        # translucent black
-C_PAW       = QColor(0xCC, 0xD5, 0xDC)   # paw pads — muted pink-gray
-
-C_INNER_EAR = QColor(0xFF, 0xB8, 0xC6)   # soft pink inner ear
-C_NOSE      = QColor(0xFF, 0x94, 0x94)   # soft coral pink
-C_WHISKER   = QColor(0xA8, 0xB0, 0xB8)   # light gray
 
 C_EYE_WHITE  = QColor(0xFF, 0xFF, 0xFF)  # pure white sclera
 C_IRIS       = QColor(0x6B, 0xA3, 0xD6)  # soft blue iris
@@ -182,16 +178,133 @@ MULTI_HUT_GAP = 10              # px gap between huts
 
 
 # ─── Coat Colors ─────────────────────────────────────────────────────────
-COAT_COLORS = [
-    # (body, belly, paw) - each is a QColor
-    QColor(0x7C, 0x8E, 0x9E),  # 0: Russian Blue (default)
-    QColor(0xF5, 0xDE, 0xB3),  # 1: Cream
-    QColor(0x8B, 0x6F, 0x47),  # 2: Brown Tabby
-    QColor(0x2F, 0x2F, 0x2F),  # 3: Black
-    QColor(0xFF, 0xFF, 0xFF),  # 4: White
-    QColor(0xD4, 0x7E, 0x6A),  # 5: Ginger
-    QColor(0xA0, 0xA0, 0xA0),  # 6: Gray
+
+@dataclass
+class CoatColors:
+    """Complete color specification for one cat coat."""
+    name: str
+    body: QColor
+    belly: QColor
+    stripe: Optional[QColor] = None
+    nose: QColor = field(default_factory=lambda: QColor(0xFF, 0x94, 0x94))
+    ear_inner: QColor = field(default_factory=lambda: QColor(0xFF, 0xB8, 0xC6))
+    eye: QColor = field(default_factory=lambda: QColor(0x6B, 0xA3, 0xD6))
+    pupil: QColor = field(default_factory=lambda: QColor(0x1A, 0x1A, 0x1A))
+    whisker: QColor = field(default_factory=lambda: QColor(0xA8, 0xB0, 0xB8))
+    paw_pads: QColor = field(default_factory=lambda: QColor(0xCC, 0xD5, 0xDC))
+    chin_chest: Optional[QColor] = None
+    stripe_style: str = "mackerel"  # "mackerel" | "solid" | "tuxedo" | "patch" | "point" | "none"
+    has_forehead_m: bool = True
+
+
+# Helper to build QColor from hex
+_H = lambda h: QColor(h)
+
+COAT_COLORS_STRUCTURED: List[CoatColors] = [
+    CoatColors(name="Gray Tabby",
+               body=QColor(0x7C, 0x8E, 0x9E),   # steel gray-blue
+               belly=QColor(0xD4, 0xD9, 0xDE),   # light warm gray
+               stripe=QColor(0x5A, 0x6B, 0x7A),
+               paw_pads=QColor(0xCC, 0xD5, 0xDC),
+               stripe_style="mackerel"),
+    CoatColors(name="Orange Tabby",
+               body=QColor(0xE8, 0x9B, 0x5D),   # warm ginger orange
+               belly=QColor(0xFC, 0xE6, 0xC9),   # cream/light tan
+               stripe=QColor(0xC4, 0x7A, 0x3C),  # darker orange-brown
+               nose=QColor(0xF0, 0x80, 0x80),    # light coral
+               ear_inner=QColor(0xFF, 0xB6, 0xC1),
+               eye=QColor(0x4C, 0xAF, 0x50),     # green
+               whisker=QColor(0xD4, 0xD4, 0xD4),
+               paw_pads=QColor(0xD4, 0x95, 0x6A),
+               chin_chest=QColor(0xFE, 0xFE, 0xFE),
+               stripe_style="mackerel",
+               has_forehead_m=True),
+    CoatColors(name="Tuxedo",
+               body=QColor(0x2F, 0x2F, 0x2F),    # near-black
+               belly=QColor(0xFE, 0xFE, 0xFE),    # white
+               stripe=None,
+               nose=QColor(0x33, 0x33, 0x33),
+               ear_inner=QColor(0x55, 0x55, 0x55),
+               eye=QColor(0xE8, 0xD5, 0x3F),     # gold
+               whisker=QColor(0xE0, 0xE0, 0xE0),
+               paw_pads=QColor(0xFE, 0xFE, 0xFE),
+               chin_chest=QColor(0xFE, 0xFE, 0xFE),
+               stripe_style="tuxedo",
+               has_forehead_m=False),
+    CoatColors(name="Calico",
+               body=QColor(0xFE, 0xFA, 0xF0),    # cream-white
+               belly=QColor(0xFE, 0xFA, 0xF0),
+               stripe=None,
+               ear_inner=QColor(0xFF, 0xB6, 0xC1),
+               eye=QColor(0x8B, 0xC3, 0x4A),     # green
+               whisker=QColor(0xD4, 0xD4, 0xD4),
+               paw_pads=QColor(0xFE, 0xFA, 0xF0),
+               stripe_style="patch",
+               has_forehead_m=False),
+    CoatColors(name="Siamese",
+               body=QColor(0xF5, 0xE6, 0xCC),    # cream
+               belly=QColor(0xFA, 0xF0, 0xDD),
+               stripe=None,
+               nose=QColor(0x6B, 0x4E, 0x37),
+               ear_inner=QColor(0x8B, 0x6E, 0x57),
+               eye=QColor(0x4A, 0x90, 0xD9),     # blue
+               whisker=QColor(0xF0, 0xF0, 0xF0),
+               paw_pads=QColor(0x6B, 0x4E, 0x37),
+               stripe_style="point",
+               has_forehead_m=False),
+    CoatColors(name="Solid Black",
+               body=QColor(0x1A, 0x1A, 0x1A),    # true black
+               belly=QColor(0x33, 0x33, 0x33),    # slightly lighter
+               stripe=None,
+               nose=QColor(0x44, 0x44, 0x44),
+               ear_inner=QColor(0x55, 0x55, 0x55),
+               eye=QColor(0xF0, 0xE6, 0x8C),     # yellow
+               whisker=QColor(0xBB, 0xBB, 0xBB),
+               paw_pads=QColor(0x44, 0x44, 0x44),
+               stripe_style="none",
+               has_forehead_m=False),
+    CoatColors(name="Tortoiseshell",
+               body=QColor(0x2F, 0x2F, 0x2F),    # dark base
+               belly=QColor(0x4A, 0x3A, 0x2A),
+               stripe=None,
+               nose=QColor(0x80, 0x60, 0x60),
+               ear_inner=QColor(0x8B, 0x6E, 0x57),
+               eye=QColor(0xE8, 0xD5, 0x3F),     # gold
+               whisker=QColor(0xBB, 0xBB, 0xBB),
+               paw_pads=QColor(0x55, 0x44, 0x44),
+               stripe_style="patch",
+               has_forehead_m=False),
 ]
+
+# Legacy aliases for backward compatibility
+C_BODY      = COAT_COLORS_STRUCTURED[0].body
+C_BELLY     = COAT_COLORS_STRUCTURED[0].belly
+C_SHADOW    = QColor(0, 0, 0, 25)
+C_PAW       = COAT_COLORS_STRUCTURED[0].paw_pads
+C_INNER_EAR = COAT_COLORS_STRUCTURED[0].ear_inner
+C_NOSE      = COAT_COLORS_STRUCTURED[0].nose
+C_WHISKER   = COAT_COLORS_STRUCTURED[0].whisker
+
+# Settings coat name → COAT_COLORS_STRUCTURED index
+COAT_NAME_INDEX = {
+    "russian_blue": 0,
+    "orange_tabby": 1,
+    "tuxedo": 2,
+    "calico": 3,
+    "siamese": 4,
+    "black": 5,
+    "tortoiseshell": 6,
+    "ginger": 1,   # legacy alias for orange tabby
+    "white": 5,     # legacy — closest to black (no white in structured)
+}
+
+
+def get_coat(index: int) -> CoatColors:
+    """Get CoatColors by index, safe for out-of-range."""
+    if 0 <= index < len(COAT_COLORS_STRUCTURED):
+        return COAT_COLORS_STRUCTURED[index]
+    return COAT_COLORS_STRUCTURED[0]
+
 
 
 # ─── Weather ──────────────────────────────────────────────────────────────────────────────

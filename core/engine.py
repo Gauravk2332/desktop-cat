@@ -821,6 +821,10 @@ class Engine:
             from ui.settings import AppSettings
             settings = AppSettings.load()
             self._sound_enabled = settings.sound_enabled
+            # Apply coat change to all cats
+            coat_idx = config.COAT_NAME_INDEX.get(settings.coat, 0)
+            for cat in self.state.cats:
+                cat["coat"] = coat_idx
         except ImportError:
             pass
 

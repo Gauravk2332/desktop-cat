@@ -25,7 +25,8 @@ from PyQt6.QtGui import QPainter, QPainterPath, QColor, QPen, QFont
 
 import config
 from core.state import CatState, CatProxy
-from cat import body, tail, legs, head, eyes
+from cat import body as cat_body, tail, legs, head, eyes
+from cat.stripes import draw_coat_pattern
 from cat.home import (
     draw_hut_frame, draw_hut_front, draw_sleeping_cat,
     draw_cat_hearts, draw_speech_bubble_for_cat,
@@ -235,48 +236,77 @@ class CatWindow(QWidget):
             from animation.breathe import breath_value
             _, bbob = breath_value(wrapped)
 
+            coat_index = getattr(wrapped, 'coat', 0)
             head_y = int(cy - 55 + bbob)
             ear_scale = 1.15 if wrapped.mouse_near else 1.0
 
-            body.draw_shadow(painter, cx, cy, wrapped)
-            tail.draw_tail_sit(painter, cx, cy, wrapped)
-            body.draw_body_sit(painter, cx, cy, wrapped)
-            legs.draw_paws(painter, cx, cy, wrapped)
-            head.draw_head(painter, cx, cy, wrapped, head_y)
-            head.draw_ears(painter, cx, cy, wrapped, head_y, ear_scale)
-            eyes.draw_eyes(painter, cx, cy, head_y, wrapped)
+            cat_body.draw_shadow(painter, cx, cy, wrapped, coat_index)
+            tail.draw_tail_sit(painter, cx, cy, wrapped, coat_index)
+            cat_body.draw_body_sit(painter, cx, cy, wrapped, coat_index)
+            legs.draw_paws(painter, cx, cy, wrapped, coat_index)
+            # Draw coat pattern (stripes, tuxedo patch, etc.) over body
+            draw_coat_pattern(painter, cx, cy, wrapped, coat_index)
+            head.draw_head(painter, cx, cy, wrapped, head_y, 1.0, coat_index)
+            head.draw_ears(painter, cx, cy, wrapped, head_y, ear_scale, coat_index)
+            eyes.draw_eyes(painter, cx, cy, head_y, wrapped, coat_index)
 
             if wrapped.reaction_type == "meow":
-                head.draw_nose(painter, cx, head_y, wrapped)
-                head.draw_whiskers(painter, cx, head_y, wrapped)
+                head.draw_nose(painter, cx, head_y, wrapped, coat_index)
+                head.draw_whiskers(painter, cx, head_y, wrapped, coat_index)
             elif wrapped.reaction_type == "purr":
-                eyes.draw_happy_eyes(painter, cx, head_y, wrapped)
-                head.draw_nose(painter, cx, head_y, wrapped)
-                head.draw_whiskers(painter, cx, head_y, wrapped)
+                eyes.draw_happy_eyes(painter, cx, head_y, wrapped, coat_index)
+                head.draw_nose(painter, cx, head_y, wrapped, coat_index)
+                head.draw_whiskers(painter, cx, head_y, wrapped, coat_index)
             else:
-                head.draw_nose(painter, cx, head_y, wrapped)
-                head.draw_whiskers(painter, cx, head_y, wrapped)
+                head.draw_nose(painter, cx, head_y, wrapped, coat_index)
+                head.draw_whiskers(painter, cx, head_y, wrapped, coat_index)
         except Exception as e:
             logging.debug("_draw_sit failed: %s", e)
 
     # ── WALK / WANDER pose ─────────────────────────────────────────
 
     def _draw_walk(self, painter, cx, cy, wrapped):
-        """Draw walking cat using a CatProxy wrapper."""
+        """Draw walking cat using a CatProxy wrapper.
+
+        Features:
+        - 4-leg articulated gait
+        - Body bob synchronized with gait (vertical oscillation ±2px)
+        - Body tilt synchronized with gait (rotation ±2°)
+        - Tail sway synchronized with gait
+        - Coat pattern (stripes) drawn over body
+        """
         try:
             from animation.breathe import breath_value
             _, bbob = breath_value(wrapped)
-            head_y = int(cy - 52 + bbob)
 
-            body.draw_shadow(painter, cx, cy, wrapped)
-            tail.draw_tail_walk(painter, cx, cy, wrapped)
-            body.draw_body_walk(painter, cx, cy, wrapped)
-            legs.draw_legs_walk(painter, cx, cy, wrapped)
-            head.draw_head(painter, cx, cy, wrapped, head_y, 0.95)
-            head.draw_ears(painter, cx, cy, wrapped, head_y, 0.95)
-            eyes.draw_eyes(painter, cx, cy, head_y, wrapped)
-            head.draw_nose(painter, cx, head_y, wrapped)
-            head.draw_whiskers(painter, cx, head_y, wrapped)
+            coat_index = getattr(wrapped, 'coat', 0)
+            walk_frame = getattr(wrapped, 'walk_frame', 0) % 8
+
+            # Body bob and tilt from gait tables
+            bob = legs.GAIT_BODY_BOB[walk_frame]
+            tilt = legs.GAIT_BODY_TILT[walk_frame]
+
+            head_y = int(cy - 52 + bbob + bob)
+
+            # Shadow stays at ground level (no bob/tilt)
+            cat_body.draw_shadow(painter, cx, cy, wrapped, coat_index)
+
+            painter.save()
+            painter.translate(0, bob)
+            painter.rotate(tilt)
+
+            tail.draw_tail_walk(painter, cx, cy, wrapped, coat_index)
+            cat_body.draw_body_walk(painter, cx, cy, wrapped, coat_index)
+            # Draw coat pattern over body before legs/head
+            draw_coat_pattern(painter, cx, cy, wrapped, coat_index)
+            legs.draw_legs_walk(painter, cx, cy, wrapped, coat_index)
+            head.draw_head(painter, cx, cy, wrapped, head_y, 0.95, coat_index)
+            head.draw_ears(painter, cx, cy, wrapped, head_y, 0.95, coat_index)
+            eyes.draw_eyes(painter, cx, cy, head_y, wrapped, coat_index)
+            head.draw_nose(painter, cx, head_y, wrapped, coat_index)
+            head.draw_whiskers(painter, cx, head_y, wrapped, coat_index)
+
+            painter.restore()
         except Exception as e:
             logging.debug("_draw_walk failed: %s", e)
 
@@ -291,6 +321,9 @@ class CatWindow(QWidget):
             painter.scale(breath, breath)
             painter.translate(-cx, -cy)
 
+            coat_index = getattr(wrapped, 'coat', 0)
+            coat = config.get_coat(coat_index)
+
             base_r = 22 if not wrapped.deep_sleep else 16
             base_y = int(cy - 10)
 
@@ -304,7 +337,7 @@ class CatWindow(QWidget):
             curl = QPainterPath()
             curl.addEllipse(int(cx - base_r), int(base_y - base_r),
                             int(base_r * 2), int(base_r * 2))
-            painter.fillPath(curl, config.C_BODY)
+            painter.fillPath(curl, coat.body)
 
             # Inner curl
             inner = QPainterPath()
@@ -314,7 +347,7 @@ class CatWindow(QWidget):
                 int(base_r * 1.0),
                 int(base_r * 0.8),
             )
-            painter.fillPath(inner, config.C_BELLY)
+            painter.fillPath(inner, coat.belly)
 
             # Ear poking out
             facing = wrapped.facing
@@ -327,7 +360,7 @@ class CatWindow(QWidget):
             ear.lineTo(int(cx + config.flip_x(base_r * 0.6, facing)),
                         int(ey - 4))
             ear.closeSubpath()
-            painter.fillPath(ear, config.C_BODY)
+            painter.fillPath(ear, coat.body)
 
             # Closed eye
             nlx = int(cx + config.flip_x(base_r * 0.2, facing))
@@ -342,10 +375,10 @@ class CatWindow(QWidget):
             nlx2 = int(cx + config.flip_x(2, facing))
             nly2 = int(base_y - base_r * 0.1 + 2)
             n2.addEllipse(nlx2 - 1, nly2 - 1, 3, 2)
-            painter.fillPath(n2, config.C_NOSE)
+            painter.fillPath(n2, coat.nose)
 
             # Tail curled
-            tail.draw_tail_sleep(painter, cx, cy, wrapped, base_r, base_y)
+            tail.draw_tail_sleep(painter, cx, cy, wrapped, base_r, base_y, coat_index)
 
             # Zzz particles
             for p in wrapped.zzz_particles:

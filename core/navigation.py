@@ -102,7 +102,7 @@ def update_walk(dt: float, state_or_cat, state=None) -> None:
         cat["walk_vy"] = abs(walk_vy) if walk_vy < 0 else walk_vy  # bounce up→down
 
     cat["y"] = new_y
-    cat["walk_frame"] = int((cat["walk_elapsed"] * 6.5) % 4)
+    cat["walk_frame"] = int((cat["walk_elapsed"] * 13.0) % 8)
 
 
 def update_wander(dt: float, state_or_cat, state=None) -> None:
@@ -169,7 +169,7 @@ def update_wander(dt: float, state_or_cat, state=None) -> None:
     walk_accum = cat.get("walk_accum", 0.0)
     walk_accum = (walk_accum + speed) % 1.0
     cat["walk_accum"] = walk_accum
-    cat["walk_frame"] = int((cat.get("wander_elapsed", 0.0) * 6.5) % 4)
+    cat["walk_frame"] = int((cat.get("wander_elapsed", 0.0) * 13.0) % 8)
 
 
 # ── Go Home ─────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ def update_go_home(dt: float, state_or_cat, state=None) -> None:
 
     cat["facing"] = dx > 0
     cat["walk_elapsed"] = cat.get("walk_elapsed", 0.0) + dt
-    cat["walk_frame"] = int((cat.get("walk_elapsed", 0.0) * 6.5) % 4)
+    cat["walk_frame"] = int((cat.get("walk_elapsed", 0.0) * 13.0) % 8)
 
 
 # ── Chase ────────────────────────────────────────────────────────
@@ -249,7 +249,7 @@ def update_chase(dt: float, state_or_cat, state=None) -> None:
     cat["y"] = max(float(y_min), min(cat["y"], float(y_max)))
 
     cat["walk_elapsed"] = cat.get("walk_elapsed", 0.0) + dt
-    cat["walk_frame"] = int((cat.get("walk_elapsed", 0.0) * 9.0) % 4)
+    cat["walk_frame"] = int((cat.get("walk_elapsed", 0.0) * 18.0) % 8)
 
 
 # ── Play ──────────────────────────────────────────────────────────
@@ -299,7 +299,7 @@ def update_play(dt: float, state_or_cat, state=None) -> None:
     cat["y"] = max(float(y_min), min(cat["y"], float(y_max)))
 
     cat["walk_elapsed"] = cat.get("walk_elapsed", 0.0) + dt
-    cat["walk_frame"] = int((cat.get("walk_elapsed", 0.0) * 6.5) % 4)
+    cat["walk_frame"] = int((cat.get("walk_elapsed", 0.0) * 13.0) % 8)
 
 
 # ── Purr / Reactions ────────────────────────────────────────────

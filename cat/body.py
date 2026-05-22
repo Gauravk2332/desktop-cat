@@ -11,15 +11,18 @@ import config
 from config import flip_x
 
 
-def draw_shadow(painter: QPainter, cx: float, cy: float, state) -> None:
+def draw_shadow(painter: QPainter, cx: float, cy: float, state,
+                coat_index: int = 0) -> None:
     """Soft ellipse shadow beneath the cat."""
     path = QPainterPath()
     path.addEllipse(int(cx - 18), int(cy - 6), 36, 10)
     painter.fillPath(path, QColor(0, 0, 0, 30))
 
 
-def draw_body_sit(painter: QPainter, cx: float, cy: float, state) -> None:
+def draw_body_sit(painter: QPainter, cx: float, cy: float, state,
+                  coat_index: int = 0) -> None:
     """Sitting body — pill-like rounded shape."""
+    coat = config.get_coat(coat_index)
     dx = flip_x(0, state.facing)
 
     body = QPainterPath()
@@ -44,7 +47,7 @@ def draw_body_sit(painter: QPainter, cx: float, cy: float, state) -> None:
         int(cx + flip_x(-18, state.facing)), int(cy - 5),
         int(cx + dx), int(cy - 5),
     )
-    painter.fillPath(body, config.C_BODY)
+    painter.fillPath(body, coat.body)
 
     # Belly highlight
     belly = QPainterPath()
@@ -53,11 +56,13 @@ def draw_body_sit(painter: QPainter, cx: float, cy: float, state) -> None:
         int(cy - 32),
         12, 20,
     )
-    painter.fillPath(belly, config.C_BELLY)
+    painter.fillPath(belly, coat.belly)
 
 
-def draw_body_walk(painter: QPainter, cx: float, cy: float, state) -> None:
+def draw_body_walk(painter: QPainter, cx: float, cy: float, state,
+                   coat_index: int = 0) -> None:
     """Walking body — slightly elongated."""
+    coat = config.get_coat(coat_index)
     dx = flip_x(0, state.facing)
 
     body = QPainterPath()
@@ -82,7 +87,7 @@ def draw_body_walk(painter: QPainter, cx: float, cy: float, state) -> None:
         int(cx + flip_x(-20, state.facing)), int(cy - 5),
         int(cx + dx), int(cy - 5),
     )
-    painter.fillPath(body, config.C_BODY)
+    painter.fillPath(body, coat.body)
 
     # Belly
     belly = QPainterPath()
@@ -91,4 +96,4 @@ def draw_body_walk(painter: QPainter, cx: float, cy: float, state) -> None:
         int(cy - 30),
         12, 20,
     )
-    painter.fillPath(belly, config.C_BELLY)
+    painter.fillPath(belly, coat.belly)
