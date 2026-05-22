@@ -118,13 +118,6 @@ class TestStateTransitions(unittest.TestCase):
         trans.update(self.dt, self.state)
         self.assertEqual(self.state.state, config.STATE_GO_HOME)
 
-    def test_go_home_sets_facing_right(self):
-        """GO_HOME should set facing=True (bed is at bottom-right)."""
-        trans = self._import_transitions()
-        self.state.energy = config.HOME_ENERGY_THRESHOLD - 1.0
-        trans.update(self.dt, self.state)
-        self.assertTrue(self.state.facing)
-
     def test_sleep_linger_resets_at_home(self):
         """After home sleep, at_home should become False after linger expires."""
         trans = self._import_transitions()
@@ -359,43 +352,105 @@ class TestNavigation(unittest.TestCase):
         self.state.state = config.STATE_WANDER
         self.state.wander_duration = 0.5
         self.state.wander_elapsed = 0.0
+        pos_before = (self.state.cat_x, self.state.cat_y)
         # Run many ticks
         for _ in range(50):
             navigation.update_wander(0.05, self.state)
         self.assertEqual(self.state.state, config.STATE_SIT)
         self.assertGreater(self.state.wander_cooldown, 0)
+        # Should have moved in some direction
+        pos_after = (self.state.cat_x, self.state.cat_y)
+        self.assertNotEqual(pos_before, pos_after, "Cat should have moved during wander")
 
-    def test_wander_bounces_off_edges(self):
-        """Wander should reverse direction at screen edges."""
+    def test_wander_bounces_off_left_edge(self):
+        """Wander should bounce off left edge (reverse vx)."""
         from core import navigation
         self.state.state = config.STATE_WANDER
-        self.state.facing = False  # going left
-        self.state.cat_x = 60.0  # near left edge
+        self.state.wander_vx = -1.0  # going left
+        self.state.wander_vy = 0.0
+        self.state.cat_x = 60.0  # near left edge (margin=60)
+        self.state.cat_y = 100.0
         self.state.wander_duration = 3.0
         self.state.wander_elapsed = 0.0
+        vx_before = self.state.wander_vx
         navigation.update_wander(0.05, self.state)
-        # Should have bounced right
-        self.assertTrue(self.state.facing)
+        # vx should be reversed
+        self.assertGreater(self.state.wander_vx, 0, "wander_vx should reverse to positive")
+        self.assertNotAlmostEqual(self.state.wander_vx, vx_before, delta=0.01)
+
+    def test_wander_bounces_off_right_edge(self):
+        """Wander should bounce off right edge (reverse vx)."""
+        from core import navigation
+        self.state.state = config.STATE_WANDER
+        self.state.wander_vx = 1.0  # going right
+        self.state.wander_vy = 0.0
+        self.state.cat_x = float(self.state.screen_width - 61)  # near right edge
+        self.state.cat_y = 100.0
+        self.state.wander_duration = 3.0
+        self.state.wander_elapsed = 0.0
+        vx_before = self.state.wander_vx
+        navigation.update_wander(0.05, self.state)
+        self.assertLess(self.state.wander_vx, 0, "wander_vx should reverse to negative")
+
+    def test_wander_bounces_off_top_edge(self):
+        """Wander should bounce off top edge (reverse vy)."""
+        from core import navigation
+        self.state.state = config.STATE_WANDER
+        self.state.wander_vx = 0.0
+        self.state.wander_vy = -1.0  # going up
+        y_min = int(self.state.screen_height * config.CAT_MIN_Y_FRACTION)
+        self.state.cat_x = 500.0
+        self.state.cat_y = float(y_min + 61)  # near top boundary
+        self.state.wander_duration = 3.0
+        self.state.wander_elapsed = 0.0
+        vy_before = self.state.wander_vy
+        navigation.update_wander(0.05, self.state)
+        self.assertGreater(self.state.wander_vy, 0, "wander_vy should reverse to positive")
+
+    def test_wander_bounces_off_bottom_edge(self):
+        """Wander should bounce off bottom edge (reverse vy)."""
+        from core import navigation
+        self.state.state = config.STATE_WANDER
+        self.state.wander_vx = 0.0
+        self.state.wander_vy = 1.0  # going down
+        y_max = self.state.screen_height - config.CAT_BASELINE
+        self.state.cat_x = 500.0
+        self.state.cat_y = float(y_max - 1)
+        self.state.wander_duration = 3.0
+        self.state.wander_elapsed = 0.0
+        vy_before = self.state.wander_vy
+        navigation.update_wander(0.05, self.state)
+        self.assertLess(self.state.wander_vy, 0, "wander_vy should reverse to negative")
 
     def test_go_home_moves_toward_bed(self):
-        """GO_HOME should move cat_x toward bed_x."""
+        """GO_HOME should move cat_x AND cat_y toward bed."""
         from core import navigation
+        from cat.home import _hut_door_center
+        hx, hy = _hut_door_center(self.state)
+        # Place cat at bottom-left of screen (far from bed at bottom-right)
+        self.state.cat_x = 100.0
+        self.state.cat_y = float(self.state.screen_height - 20)
         self.state.state = config.STATE_GO_HOME
-        self.state.cat_x = 500.0
-        before = self.state.cat_x
+        before_x, before_y = self.state.cat_x, self.state.cat_y
         navigation.update_go_home(0.05, self.state)
-        self.assertGreater(self.state.cat_x, before)  # moving right toward bed
+        # Should move right AND up toward bed
+        self.assertGreater(self.state.cat_x, before_x, "cat_x should increase (move right toward bed)")
+        self.assertLess(self.state.cat_y, before_y, "cat_y should decrease (move up toward bed)")
 
     def test_go_home_arrives_at_hut(self):
-        """GO_HOME should set SLEEP when approaching hut door center."""
+        """GO_HOME should set SLEEP when approaching hut door center in 2D."""
         from core import navigation
         from cat.home import _hut_door_center
         hx, hy = _hut_door_center(self.state)
         self.state.state = config.STATE_GO_HOME
-        self.state.cat_x = hx - 1.0  # close enough
+        # Close in both x and y
+        self.state.cat_x = hx - 1.0
+        self.state.cat_y = float(hy)  # y matches
         navigation.update_go_home(0.05, self.state)
         self.assertEqual(self.state.state, config.STATE_SLEEP)
         self.assertTrue(self.state.at_home)
+        self.assertAlmostEqual(self.state.cat_x, hx, delta=2)
+        self.assertAlmostEqual(self.state.cat_y, hy - 2, delta=2)
 
     def test_walk_accelerates_then_decelerates(self):
         """Walk accel curve should go up then down."""
@@ -429,6 +484,19 @@ class TestNavigation(unittest.TestCase):
             frames.add(self.state.walk_frame)
         # Should have cycled through multiple frames
         self.assertGreater(len(frames), 1)
+
+    def test_go_home_sets_correct_facing(self):
+        """GO_HOME navigation should face toward hut."""
+        from core import navigation
+        from cat.home import _hut_door_center
+        hx, hy = _hut_door_center(self.state)
+        self.state.state = config.STATE_GO_HOME
+        # Cat at left of bed
+        self.state.cat_x = 100.0
+        self.state.cat_y = float(hy)
+        self.state.facing = False  # initially facing wrong way
+        navigation.update_go_home(0.05, self.state)
+        self.assertTrue(self.state.facing, "Cat should face right toward bed")
 
 
 class TestAPI(unittest.TestCase):

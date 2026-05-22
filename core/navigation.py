@@ -62,12 +62,17 @@ def update_walk(dt: float, state) -> None:
 
 
 def update_wander(dt: float, state) -> None:
-    """Update wander navigation. Extracted from Engine._update_wander."""
+    """Wander in 2D — random direction, bounces off all edges."""
     state.wander_elapsed += dt
 
-    # Random direction reversal
+    # Random direction change
     if random.random() < config.WANDER_TURN_CHANCE:
-        state.facing = not state.facing
+        angle = random.uniform(0, math.pi * 2)
+        state.wander_vx = math.cos(angle)
+        state.wander_vy = math.sin(angle)
+        # Ensure cat doesn't go straight up or down (unnatural)
+        if abs(state.wander_vx) < 0.3:
+            state.wander_vx = 0.3 if state.facing else -0.3
 
     # Check if wander timer expired
     if state.wander_elapsed >= state.wander_duration:
@@ -76,34 +81,63 @@ def update_wander(dt: float, state) -> None:
         state.wander_cooldown = config.WANDER_COOLDOWN
         return
 
-    # Walk movement in facing direction
+    # Move
     speed = config.WALK_SPEED * dt * 1.0
     margin = config.WANDER_OFFSET
 
-    if state.facing:
-        state.cat_x += speed
-        if state.cat_x + margin >= state.screen_width:
-            state.cat_x = float(state.screen_width - margin)
-            state.facing = False
+    # Normalize direction vector
+    mag = math.hypot(state.wander_vx, state.wander_vy)
+    if mag > 0:
+        vx = state.wander_vx / mag
+        vy = state.wander_vy / mag
     else:
-        state.cat_x -= speed
-        if state.cat_x - margin <= 0:
-            state.cat_x = float(margin)
-            state.facing = True
+        vx, vy = 1.0, 0.0
 
+    new_x = state.cat_x + vx * speed
+    new_y = state.cat_y + vy * speed
+
+    # Y-range limits (don't go too high or off bottom)
+    y_min = state.screen_height * config.CAT_MIN_Y_FRACTION
+    y_max = state.screen_height - config.CAT_BASELINE
+
+    # Bounce off ALL edges
+    if new_x + margin >= state.screen_width:
+        new_x = float(state.screen_width - margin)
+        state.wander_vx = -state.wander_vx
+    elif new_x - margin <= 0:
+        new_x = float(margin)
+        state.wander_vx = -state.wander_vx
+
+    if new_y + margin >= y_max:
+        new_y = float(y_max)
+        state.wander_vy = -state.wander_vy
+    elif new_y - margin <= y_min:
+        new_y = float(y_min)
+        state.wander_vy = -state.wander_vy
+
+    state.cat_x = new_x
+    state.cat_y = new_y
+
+    # Facing direction mirrors horizontal velocity
+    state.facing = vx > 0
+
+    # Walk frame
     state.walk_accum = (state.walk_accum + speed) % 1.0
     state.walk_frame = int((state.wander_elapsed * 6.5) % 4)
 
 
 def update_go_home(dt: float, state) -> None:
-    """Update go-home navigation. Extracted from Engine._update_go_home."""
+    """Navigate toward hut door in 2D."""
     from cat.home import _hut_door_center
     hx, hy = _hut_door_center(state)
-    remaining = hx - state.cat_x
 
-    if remaining <= config.HOME_TOLERANCE:
-        # Arrived at home
-        state.cat_x = hx
+    dx = hx - state.cat_x
+    dy = hy - state.cat_y
+    dist = math.hypot(dx, dy)
+
+    if dist <= config.HOME_TOLERANCE:
+        state.cat_x = float(hx)
+        state.cat_y = float(hy - 2)  # slightly above door floor (cat sits on floor)
         state.at_home = True
         state.state = config.STATE_SLEEP
         state.sleep_breath = 0.0
@@ -111,12 +145,16 @@ def update_go_home(dt: float, state) -> None:
         state.walk_elapsed = 0.0
         return
 
-    # Accelerate toward home, decelerate near arrival
     speed = config.WALK_SPEED * dt * 1.2
-    if remaining < speed * 5:
-        speed = remaining / 5.0  # ease in
+    if dist < speed * 5:
+        speed = dist / 5.0  # ease in
 
-    state.cat_x += speed
+    # Move toward target
+    if dist > 0:
+        state.cat_x += (dx / dist) * speed
+        state.cat_y += (dy / dist) * speed
+
+    state.facing = dx > 0  # face toward home
     state.walk_elapsed += dt
     state.walk_frame = int((state.walk_elapsed * 6.5) % 4)
 

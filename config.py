@@ -30,9 +30,12 @@ HUNGER_DRAIN         = 0.003
 BOREDOM_INCREASE_SIT = 0.005
 
 # ─── Movement ─────────────────────────────────────────────────────────────
-WALK_SPEED     = 80.0   # px/s
+WALK_SPEED      = 80.0   # px/s
 WALK_ACCEL_TIME = 0.4   # seconds to reach full speed
 WALK_DURATION_MIN = 0.5
+
+# ─── 2D Movement ────────────────────────────────────────────────────────────
+CAT_MIN_Y_FRACTION = 0.35   # cat won't go above this fraction of screen height
 
 # ─── States ───────────────────────────────────────────────────────────────
 STATE_SIT     = "SIT"

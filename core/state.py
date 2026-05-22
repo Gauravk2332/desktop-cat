@@ -29,11 +29,13 @@ class CatState:
     walk_frame: int = 0
     walk_accum: float = 0.0
 
-    # ── Wander internals ──
+    # ── Wander internals (2D movement) ──
     wander_duration: float = 0.0     # how long this wander leg lasts
     wander_elapsed: float = 0.0
     wander_cooldown: float = 0.0     # seconds until next wander session
     wander_session_count: int = 0    # legs per wander session
+    wander_vx: float = 1.0           # wander velocity x component
+    wander_vy: float = 0.0           # wander velocity y component
 
     # ── Home / Bed ──
     at_home: bool = False            # cat is on/near the bed
