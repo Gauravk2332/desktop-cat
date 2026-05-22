@@ -70,9 +70,10 @@ def main():
         logger.critical("Engine creation failed: %s", exc_info=True)
         sys.exit(1)
 
-    # 4. Pass state reference to API
-    from core.api import set_state_ref
+    # 4. Pass state and engine reference to API
+    from core.api import set_state_ref, set_engine_ref
     set_state_ref(state)
+    set_engine_ref(engine)
 
     # 5. Start HTTP API daemon
     try:

@@ -17,11 +17,17 @@ action_queue: Queue = Queue()
 
 # Global state reference set from main.py
 _STATE = None
+_ENGINE = None
 
 
 def set_state_ref(state) -> None:
     global _STATE
     _STATE = state
+
+
+def set_engine_ref(engine) -> None:
+    global _ENGINE
+    _ENGINE = engine
 
 
 class _APIHandler(BaseHTTPRequestHandler):
@@ -40,6 +46,29 @@ class _APIHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/test-sound":
+            play_name = ""
+            try:
+                s = parsed.query.split("&") if parsed.query else []
+                for item in s:
+                    k, _, v = item.partition("=")
+                    if k == "name":
+                        play_name = v
+            except Exception:
+                pass
+            if not play_name:
+                play_name = "meow_short"
+            engine = _ENGINE
+            if engine:
+                try:
+                    engine.sound.play(play_name)
+                    self._send_json({"status": "ok", "played": play_name})
+                except Exception as e:
+                    self._send_json({"error": str(e)}, 500)
+            else:
+                self._send_json({"error": "engine not available"}, 503)
+            return
+
         if parsed.path == "/":
             try:
                 s = _STATE
