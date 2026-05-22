@@ -35,6 +35,8 @@ class BehaviorPlanner:
         self._stare_timer = 0.0
         self._micro_timer = 0.0
         self._activity_burst_start = None
+        self._uncertainty_timer = 0.0
+        self._uncertainty_cooldown = 0.0
 
     def update(
         self,
@@ -59,12 +61,25 @@ class BehaviorPlanner:
             Tuple of (action: str, is_sequence: bool, priority: int)
             where action is the selected behavior action.
         """
+        # Phase 4: Track uncertainty timer for LLM trigger
+        self._uncertainty_timer += dt
+        self._uncertainty_cooldown = max(0.0, self._uncertainty_cooldown - dt)
+
+        # Set uncertainty flag when stuck in idle > 5s (trigger #5 for LLM)
+        if self._uncertainty_timer > 5.0 and self._uncertainty_cooldown <= 0:
+            cat["_planner_uncertain"] = True
+
         chain = self._evaluate_chain(cat, state, circadian, personality, memory)
 
         if chain is None:
             return ("idle", False, 0)
 
         action, is_sequence, priority = chain
+
+        # If a definite (non-idle) action was selected, reset uncertainty
+        if priority < 6:
+            self._uncertainty_timer = 0.0
+            cat["_planner_uncertain"] = False
 
         # If running a sequence, advance it
         if is_sequence and self.sequence_runner.running:
@@ -103,6 +118,11 @@ class BehaviorPlanner:
         if interaction_result:
             return interaction_result
 
+        # Layer 3.5: LLM NOVELTY — LLM-driven spice on specific triggers
+        llm_result = self._check_llm_novelty(cat, state, circadian, personality, memory)
+        if llm_result:
+            return llm_result
+
         # Layer 4: NEEDS — bodily needs
         needs_result = self._check_needs(cat, state, circadian, personality)
         if needs_result:
@@ -136,6 +156,48 @@ class BehaviorPlanner:
             return ("greet", False, 3)
 
         return None
+
+    def _check_llm_novelty(
+        self, cat, state, circadian=None, personality=None, memory=None,
+    ) -> Optional[tuple]:
+        """Layer 3.5: LLM novelty — fires on specific triggers, <10% of decisions."""
+        if not config.LLM_ENABLED:
+            return None
+
+        from behavior.llm_planner import evaluate_llm
+        intent = evaluate_llm(cat, state, circadian, personality, memory)
+        if intent is None:
+            return None
+
+        action = intent.get("suggested_action", "sit")
+        motivation = intent.get("motivation", "explore")
+
+        # Convert suggested action to planner-compatible action
+        action_map = {
+            "sit": "sit",
+            "sleep": "sleep",
+            "walk": "walk",
+            "meow": "meow",
+            "purr": "purr",
+            "groom": "groom",
+            "stretch": "stretch",
+            "chase": "chase",
+            "follow": "follow",
+            "scratch": "scratch",
+        }
+
+        mapped = action_map.get(action, "sit")
+
+        # Set "think" flag on cat for visual
+        cat["_think_pose"] = True
+
+        # Clear uncertainty since LLM provided a decision
+        self._uncertainty_timer = 0.0
+        self._uncertainty_cooldown = 60.0  # Don't retrigger for 60s
+        cat["_planner_uncertain"] = False
+
+        logger.debug("LLM novelty: action=%s motivation=%s", mapped, motivation)
+        return (mapped, False, 4)  # priority 4 = between interaction and needs
 
     def _check_needs(
         self,

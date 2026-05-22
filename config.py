@@ -378,6 +378,23 @@ ENERGY_CRITICAL_THRESHOLD = 20
 BOREDOM_ERRATIC_THRESHOLD = 80
 FEED_HUNGER_REDUCTION = 30          # Hunger reduced per Ctrl+F press
 
+# ─── Phase 4: LLM Intelligence Layer ────────────────────────────────────────
+LLM_ENABLED = True
+LLM_TIMEOUT = 2.0
+LLM_BLACKOUT_SECONDS = 300
+LLM_MAX_PERCENT = 10.0
+LLM_TRIGGER_NEEDS_CONFLICT = True
+LLM_TRIGGER_NOVEL_INTERACTION = True
+LLM_TRIGGER_SOCIAL_RETURN = True
+LLM_TRIGGER_NIGHT_DISTURBANCE = True
+LLM_TRIGGER_UNCERTAINTY = True
+
+# Remote API config (DeepSeek via clowbot proxy)
+REMOTE_API_URL = "http://localhost:8080/v1/chat/completions"
+REMOTE_API_KEY = ""
+AGENT_REMOTE_MODEL = "deepseek-chat"
+
+
 # ─── Phase 3: Learning Systems ──────────────────────────────────────────────
 FAVORITE_ZONE_THRESHOLD = 10    # visits to mark as favorite
 FAVORITE_ZONE_WEIGHT = 3.0     # multiplier for idle selection
