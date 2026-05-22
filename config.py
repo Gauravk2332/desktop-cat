@@ -19,7 +19,7 @@ DEBUG = False  # Set True for verbose logging during development
 CAT_BASELINE = 20        # px above screen bottom for cat base
 
 # ─── Timing ───────────────────────────────────────────────────────────────
-TICK_MS = 50
+TICK_MS = 30   # ~33fps — smoother movement updates
 TICK_S = TICK_MS / 1000.0     # 0.05
 
 SAVE_INTERVAL = 30.0          # Persist state every N seconds
@@ -33,8 +33,8 @@ HUNGER_DRAIN         = 0.003
 BOREDOM_INCREASE_SIT = 0.005
 
 # ─── Movement ─────────────────────────────────────────────────────────────
-WALK_SPEED      = 80.0   # px/s
-WALK_ACCEL_TIME = 0.4   # seconds to reach full speed
+WALK_SPEED      = 55.0   # px/s — slower, more natural gait
+WALK_ACCEL_TIME = 0.6   # seconds to reach full speed — gentler start/stop
 WALK_DURATION_MIN = 0.5
 
 # ─── 2D Movement ────────────────────────────────────────────────────────────
