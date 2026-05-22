@@ -1,1 +1,1 @@
-# behavior package — need systems and state machine
+# behavior package — need systems, state machine, personality, reactions, habituation

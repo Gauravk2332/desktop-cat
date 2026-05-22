@@ -327,6 +327,12 @@ def get_coat(index: int) -> CoatColors:
 
 
 
+# ─── Circadian Clock ──────────────────────────────────────────────────────────────
+CIRCADIAN_ENABLED = True       # feature flag
+CIRCADIAN_TICK_INTERVAL = 1.0  # seconds between phase checks
+CLOCK_JUMP_THRESHOLD = 300     # seconds — treat as discontinuity
+
+
 # ─── Weather ──────────────────────────────────────────────────────────────────────────────
 WEATHER_CITY = "Mumbai"             # Default city for wttr.in
 WEATHER_CACHE_INTERVAL = 1800       # Seconds between fetches (30 min)
@@ -342,6 +348,21 @@ NEED_TIME_MULTIPLIERS = {
     "hunger": ((7, 9, 1.5), (19, 21, 1.5)),
 }
 
+
+# ─── Personality ────────────────────────────────────────────────────────────
+PERSONALITY_ENABLED = True
+PERSONALITY_FILE = os.path.join(
+    os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
+    "Nova", "desktop-cat", "personality.json"
+)
+
+# ─── Reactions ─────────────────────────────────────────────────────────────
+REACTION_ENABLED = True
+
+# ─── Habituation ───────────────────────────────────────────────────────────
+NEEDS_ENABLED = True
+HABITUATION_ENABLED = True
+HABITUATION_DECAY_RATE = 240.0  # seconds per count decay
 
 # ─── Smart Needs: AFK & Critical Thresholds ───────────────────────────────
 AFK_BOREDOM_MULTIPLIER = 2.0
