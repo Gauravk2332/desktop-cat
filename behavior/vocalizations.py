@@ -198,14 +198,15 @@ def _detect_proximity_events(vs: VocalizationState, cat_x: float, cat_y: float,
                 result["sudden_approach"] = True
                 vs.alert_triggered = True
 
-    # Mouse still detection
+    # Mouse still detection (threshold scales with screen width)
     if len(vs.mouse_positions) >= 3:
         positions = list(vs.mouse_positions)[-3:]
         total_move = sum(
             _distance(positions[i][0], positions[i][1], positions[i - 1][0], positions[i - 1][1])
             for i in range(1, len(positions))
         )
-        result["mouse_still"] = total_move < 5.0
+        still_threshold = _screen_scale(screen_width, 5.0)
+        result["mouse_still"] = total_move < still_threshold
 
     return result
 
@@ -237,17 +238,17 @@ def _check_distress(vs: VocalizationState, cat: dict, now: float,
 
     # Yowl at critical needs (only if cooldown expired)
     if hunger > 90 or energy < 15:
-        cd = vs.cooldowns.get("yowl", 0.0)
+        cd = vs.cooldowns.get("yowl", float('-inf'))
         if now - cd >= 180.0:
             return SoundCandidate("yowl", TIER_DISTRESS)
         # If already yowled recently, escalate to urgent meow
-        cd_short = vs.cooldowns.get("meow_long", 0.0)
+        cd_short = vs.cooldowns.get("meow_long", float('-inf'))
         if now - cd_short >= 60.0:
             return SoundCandidate("meow_long", TIER_URGENT)
 
     # Urgent meow at moderate hunger
     if hunger > 70:
-        cd = vs.cooldowns.get("meow_long", 0.0)
+        cd = vs.cooldowns.get("meow_long", float('-inf'))
         if now - cd >= 60.0:
             return SoundCandidate("meow_long", TIER_URGENT)
 
@@ -265,18 +266,18 @@ def _check_boredom(vs: VocalizationState, cat: dict, now: float,
 
     # Escalating boredom meows
     if boredom > 80:
-        cd = vs.cooldowns.get("meow_long", 0.0)
+        cd = vs.cooldowns.get("meow_long", float('-inf'))
         if now - cd >= 45.0:
             return SoundCandidate("meow_long", TIER_URGENT)
 
     if boredom > 60:
-        cd = vs.cooldowns.get("meow_short", 0.0)
+        cd = vs.cooldowns.get("meow_short", float('-inf'))
         if now - cd >= 30.0 and random.random() < 0.4:
             return SoundCandidate("meow_short", TIER_URGENT)
 
     # Idle meow at moderate boredom (less frequent)
     if boredom > 40 and state == config.STATE_SIT:
-        cd = vs.cooldowns.get("meow_short", 0.0)
+        cd = vs.cooldowns.get("meow_short", float('-inf'))
         if now - cd >= 60.0 and random.random() < 0.15:
             return SoundCandidate("meow_short", TIER_IDLE)
 
@@ -290,23 +291,23 @@ def _check_proximity(vs: VocalizationState, cat: dict, now: float,
 
     # Sudden approach → hiss or alert
     if proximity.get("sudden_approach") and state != config.STATE_SLEEP:
-        cd = vs.cooldowns.get("hiss", 0.0)
+        cd = vs.cooldowns.get("hiss", float('-inf'))
         if now - cd >= 120.0:
             return SoundCandidate("hiss", TIER_DISTRESS)
 
     # Owner returned → greeting trill (or short meow if trill on cooldown)
     if proximity.get("owner_returned"):
-        cd = vs.cooldowns.get("trill", 0.0)
+        cd = vs.cooldowns.get("trill", float('-inf'))
         if now - cd >= 60.0:
             return SoundCandidate("trill", TIER_INTERACT)
         else:
-            cd_short = vs.cooldowns.get("meow_short", 0.0)
+            cd_short = vs.cooldowns.get("meow_short", float('-inf'))
             if now - cd_short >= 30.0:
                 return SoundCandidate("meow_short", TIER_INTERACT)
 
     # Just started petting → purr (handled by engine loop, but also trill)
     if proximity.get("just_petted") and random.random() < 0.3:
-        cd = vs.cooldowns.get("trill", 0.0)
+        cd = vs.cooldowns.get("trill", float('-inf'))
         if now - cd >= 120.0:
             return SoundCandidate("trill", TIER_INTERACT)
 
@@ -320,16 +321,16 @@ def _check_play_excitement(vs: VocalizationState, cat: dict, now: float,
 
     if state == config.STATE_CHASE:
         # Chirp when chasing laser
-        cd = vs.cooldowns.get("chirp", 0.0)
+        cd = vs.cooldowns.get("chirp", float('-inf'))
         if now - cd >= 10.0 and random.random() < 0.3:
             return SoundCandidate("chirp", TIER_INTERACT)
         # Chatter during chase (less frequent)
-        cd_chat = vs.cooldowns.get("chatter", 0.0)
+        cd_chat = vs.cooldowns.get("chatter", float('-inf'))
         if now - cd_chat >= 20.0 and random.random() < 0.15:
             return SoundCandidate("chatter", TIER_INTERACT)
 
     if state == config.STATE_PLAY:
-        cd = vs.cooldowns.get("chirp", 0.0)
+        cd = vs.cooldowns.get("chirp", float('-inf'))
         if now - cd >= 15.0 and random.random() < 0.2:
             return SoundCandidate("chirp", TIER_INTERACT)
 
@@ -359,25 +360,25 @@ def _check_idle_vocalizations(vs: VocalizationState, cat: dict, now: float,
 
         # Trill when owner is near (happy, showing off)
         if owner_near:
-            cd = vs.cooldowns.get("trill", 0.0)
+            cd = vs.cooldowns.get("trill", float('-inf'))
             if now - cd >= 90.0 and random.random() < 0.4:
                 candidates.append(SoundCandidate("trill", TIER_IDLE))
 
         # Short meow when owner is near but not engaging
         if owner_near and not owner_petting and boredom > 30:
-            cd = vs.cooldowns.get("meow_short", 0.0)
+            cd = vs.cooldowns.get("meow_short", float('-inf'))
             if now - cd >= 60.0 and random.random() < 0.3:
                 candidates.append(SoundCandidate("meow_short", TIER_IDLE))
 
         # Rare chirp when sitting and bored
         if boredom > 20 and random.random() < 0.2:
-            cd = vs.cooldowns.get("chirp", 0.0)
+            cd = vs.cooldowns.get("chirp", float('-inf'))
             if now - cd >= 45.0:
                 candidates.append(SoundCandidate("chirp", TIER_IDLE))
 
         # Random purr-like trill when content (low boredom, not hungry)
         if boredom < 30 and cat.get("hunger", 20) < 50 and random.random() < 0.25:
-            cd = vs.cooldowns.get("trill", 0.0)
+            cd = vs.cooldowns.get("trill", float('-inf'))
             if now - cd >= 60.0:
                 candidates.append(SoundCandidate("trill", TIER_IDLE))
 
@@ -473,31 +474,23 @@ class VocalizationSystem:
             return None
 
         # Priority resolution: select the highest-priority (lowest tier number) sound.
-        # Within same tier, random selection weighted by urgency.
-        candidates.sort(key=lambda c: c.tier)
+        # Batch-exclude candidates on cooldown first, then tie-break within the priority tier.
+        def _is_available(c: SoundCandidate) -> bool:
+            cd_duration = SOUND_DEFS.get(c.name, (c.name, 60.0, TIER_IDLE, ""))[1]
+            last_played = vs.cooldowns.get(c.name, float('-inf'))
+            return now - last_played >= cd_duration
 
-        best_tier = candidates[0].tier
-        same_tier = [c for c in candidates if c.tier == best_tier]
-
-        if not same_tier:
+        available = [c for c in candidates if _is_available(c)]
+        if not available:
             return None
+
+        # Sort by priority tier
+        available.sort(key=lambda c: c.tier)
+        best_tier = available[0].tier
+        same_tier = [c for c in available if c.tier == best_tier]
 
         # Resolve ties randomly
         winner = random.choice(same_tier)
-
-        # Check cooldown explicitly (shouldn't normally fail since trigger
-        # functions check their own cooldowns, but safety net)
-        _, _, definition_tier, _ = SOUND_DEFS.get(winner.name, ("", 0, TIER_SILENT, ""))
-        if winner.name in vs.cooldowns:
-            cd_duration = SOUND_DEFS.get(winner.name, (winner.name, 60.0, TIER_IDLE, ""))[1]
-            if now - vs.cooldowns[winner.name] < cd_duration:
-                # Cooldown not expired — pick next best
-                candidates = [c for c in candidates if c.name != winner.name]
-                if candidates:
-                    candidates.sort(key=lambda c: c.tier)
-                    winner = random.choice([c for c in candidates if c.tier == candidates[0].tier])
-                else:
-                    return None
 
         # Record cooldown
         vs.cooldowns[winner.name] = now
@@ -505,11 +498,6 @@ class VocalizationSystem:
         vs.last_sound_time = now
 
         return winner
-
-    def update_mouse_position(self, mouse_x: float, mouse_y: float):
-        """Update the global mouse position reference on state."""
-        # This is called from engine._check_mouse
-        pass
 
     def reset(self, cat_idx: int = 0):
         """Reset vocalization state for a specific cat (e.g., after load)."""

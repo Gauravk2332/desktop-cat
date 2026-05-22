@@ -393,5 +393,133 @@ class TestVocalizationSystemInit(unittest.TestCase):
         self.assertEqual(len(vsys._vocal_states), 3)
 
 
+class TestIdleVocalizations(unittest.TestCase):
+    """Test _check_idle_vocalizations trigger path."""
+
+    def setUp(self):
+        from behavior.vocalizations import VocalizationState, _check_idle_vocalizations
+        self.VocalizationState = VocalizationState
+        self._check = _check_idle_vocalizations
+
+    def test_idle_trill_when_owner_near(self):
+        """Trill should be eligible when owner is near."""
+        from behavior.vocalizations import SoundCandidate
+        vs = self.VocalizationState()
+        vs.idle_timer = -1.0  # Force trigger
+        cat = _make_cat({"boredom": 20.0, "hunger": 30.0, "state": "SIT"})
+        proximity = {
+            "current_distance": 50,  # Near cat
+            "petting": False,
+            "owner_returned": False,
+            "sudden_approach": False,
+            "owner_left": False,
+            "mouse_still": True,
+        }
+        vs.cooldowns["trill"] = 0.0
+        with patch('behavior.vocalizations.random.random', return_value=0.1):
+            with patch('behavior.vocalizations.random.choice', return_value=SoundCandidate("trill", 3)):
+                result = self._check(vs, cat, time.monotonic(), proximity)
+                self.assertIsNotNone(result)
+                self.assertEqual(result.name, "trill")
+
+    def test_idle_sound_skipped_when_sleeping(self):
+        vs = self.VocalizationState()
+        vs.idle_timer = -1.0
+        cat = _make_cat({"state": "SLEEP"})
+        result = self._check(vs, cat, time.monotonic(), {})
+        self.assertIsNone(result)
+
+    def test_idle_sound_skipped_when_chasing(self):
+        vs = self.VocalizationState()
+        cat = _make_cat({"state": "CHASE"})
+        result = self._check(vs, cat, time.monotonic(), {})
+        self.assertIsNone(result)
+
+    def test_idle_timer_not_expired_returns_none(self):
+        vs = self.VocalizationState()
+        vs.idle_timer = 100.0  # Not expired
+        cat = _make_cat({"state": "SIT"})
+        result = self._check(vs, cat, time.monotonic(), {})
+        self.assertIsNone(result)
+
+    def test_meow_short_when_near_not_petting_bored(self):
+        vs = self.VocalizationState()
+        vs.idle_timer = -1.0
+        cat = _make_cat({"boredom": 50.0, "state": "SIT"})
+        proximity = {
+            "current_distance": 50,
+            "petting": False,
+        }
+        # Block the higher-priority trill so meow_short is selected
+        vs.cooldowns["trill"] = time.monotonic()
+        vs.cooldowns["meow_short"] = 0.0
+        with patch('behavior.vocalizations.random.random', return_value=0.2):
+            result = self._check(vs, cat, time.monotonic(), proximity)
+            self.assertIsNotNone(result)
+            self.assertIn(result.name, ["meow_short", "chirp"])
+
+
+class TestHissTrigger(unittest.TestCase):
+    """Test hiss candidate generation."""
+
+    def setUp(self):
+        from behavior.vocalizations import VocalizationState, _check_proximity
+        self.VocalizationState = VocalizationState
+        self._check = _check_proximity
+
+    def test_hiss_on_sudden_approach(self):
+        vs = self.VocalizationState()
+        cat = _make_cat({"state": "SIT"})
+        proximity = {
+            "sudden_approach": True,
+        }
+        result = self._check(vs, cat, time.monotonic(), proximity)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.name, "hiss")
+
+    def test_hiss_not_triggered_by_slow_approach(self):
+        vs = self.VocalizationState()
+        cat = _make_cat({"state": "SIT"})
+        proximity = {
+            "sudden_approach": False,
+        }
+        result = self._check(vs, cat, time.monotonic(), proximity)
+        self.assertIsNone(result)
+
+    def test_hiss_blocked_by_cooldown(self):
+        vs = self.VocalizationState()
+        vs.cooldowns["hiss"] = time.monotonic()  # Just played
+        cat = _make_cat({"state": "SIT"})
+        proximity = {"sudden_approach": True}
+        result = self._check(vs, cat, time.monotonic(), proximity)
+        self.assertIsNone(result)
+
+
+class TestChatterTrigger(unittest.TestCase):
+    """Test chatter candidate generation during chase."""
+
+    def setUp(self):
+        from behavior.vocalizations import VocalizationState, _check_play_excitement
+        self.VocalizationState = VocalizationState
+        self._check = _check_play_excitement
+
+    def test_chatter_during_chase(self):
+        """Chatter should be generated when chirp is on cooldown."""
+        vs = self.VocalizationState()
+        cat = _make_cat({"state": "CHASE"})
+        vs.cooldowns["chatter"] = 0.0
+        vs.cooldowns["chirp"] = time.monotonic()  # Block chirp so chatter wins
+        with patch('behavior.vocalizations.random.random', return_value=0.1):
+            result = self._check(vs, cat, time.monotonic(), {})
+            self.assertIsNotNone(result)
+            self.assertEqual(result.name, "chatter")
+
+    def test_chatter_not_during_sit(self):
+        vs = self.VocalizationState()
+        cat = _make_cat({"state": "SIT"})
+        result = self._check(vs, cat, time.monotonic(), {})
+        self.assertIsNone(result)
+
+
 if __name__ == "__main__":
     unittest.main()
