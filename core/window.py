@@ -24,7 +24,7 @@ from PyQt6.QtGui import QPainter, QPainterPath, QColor, QPen, QFont
 import config
 from core.state import CatState
 from cat import body, tail, legs, head, eyes
-from cat.home import draw_hut_frame, draw_hut_front, draw_sleeping_cat
+from cat.home import draw_hut_frame, draw_hut_front, draw_sleeping_cat, draw_hearts
 
 
 class CatWindow(QWidget):
