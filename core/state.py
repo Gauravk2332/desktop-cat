@@ -24,6 +24,7 @@ class CatState:
     walk_duration: float = 0.0
     walk_elapsed: float = 0.0
     walk_pause: bool = False
+    walk_pause_start: float = 0.0  # monotonic time when pause started
     walk_accel: float = 1.0
     walk_frame: int = 0
     walk_accum: float = 0.0
