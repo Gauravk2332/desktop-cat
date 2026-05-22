@@ -6,13 +6,17 @@ Window is full-screen overlay — cat_x/cat_y are screen coords.
 No window.move() calls — the window is static.
 """
 
+import logging
 import math
 import random
 import time
 import json
 import os
+import sys
 from collections import OrderedDict
 from datetime import datetime
+
+logging.basicConfig(level=logging.WARNING)
 
 from PyQt6.QtCore import QTimer, QElapsedTimer, QPointF
 from PyQt6.QtGui import QScreen, QCursor
@@ -146,8 +150,8 @@ class Engine:
             # 6. Repaint
             self.window.update()
 
-        except Exception:
-            pass
+        except Exception as e:
+            logging.exception("desktop-cat engine tick failed: %s", e)
 
     def _update_animations(self, dt: float) -> None:
         s = self.state
@@ -264,7 +268,8 @@ class Engine:
 
         # Approach walk (mouse within 80px)
         if dist < 80 and s.state == config.STATE_SIT:
-            if random.random() < 0.03:
+            if (time.monotonic() - s.last_interaction > 3.0 and
+                random.random() < 0.01):
                 s.facing = cursor.x() > cx
                 s.state = config.STATE_WALK
                 s.walk_duration = max(0.8, random.uniform(1.5, 3.0))
@@ -290,7 +295,10 @@ class Engine:
     # ── System idle detection ───────────────────────────────────────────
 
     def _poll_idle(self):
-        """Check GetLastInputInfo for system-wide idle."""
+        """Check GetLastInputInfo for system-wide idle (Windows only)."""
+        if sys.platform != "win32":
+            return  # idle detection only supported on Windows
+
         try:
             import ctypes
             class _LASTINPUTINFO(ctypes.Structure):
@@ -305,5 +313,5 @@ class Engine:
                     self.state.deep_sleep = True
                 else:
                     self.state.deep_sleep = False
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning("Idle detection failed: %s", e)

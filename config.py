@@ -7,6 +7,11 @@ No runtime changes. All values are final per session.
 import os
 from PyQt6.QtGui import QColor, QFont
 
+DEBUG = False  # Set True for verbose logging during development
+
+# ─── Debug ──────────────────────────────────────────────────────────────
+# DEBUG is at top, after imports
+
 # ─── Window (full-screen overlay) ──────────────────────────────────────
 CAT_BASELINE = 20        # px above screen bottom for cat base
 
