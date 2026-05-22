@@ -23,6 +23,7 @@ from collections import deque
 from typing import Any, Optional
 
 import config
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +203,34 @@ class CatMemory:
         """Save all memory to disk."""
         self._save_json(self._memory_file, self.long_term)
         self._save_json(self._territory_file, self.territory)
+
+    # ─── Zone Visit Learning ────────────────────────────────────────────
+
+    def record_zone_visit(self, zone: str) -> None:
+        """Record a visit to a territory zone. Track for favorite marking."""
+        visits = self.long_term.setdefault("zone_visits", {})
+        visits[zone] = visits.get(zone, 0) + 1
+
+    def get_favorite_zones(self, min_visits: int = 10) -> list:
+        """Zones with >= min_visits visits (at 3× idle weight)."""
+        visits = self.long_term.get("zone_visits", {})
+        today = time.strftime("%Y-%m-%d")
+        last_decay = self.long_term.get("last_zone_decay", "")
+        if last_decay != today:
+            for z in list(visits.keys()):
+                visits[z] = max(0, visits[z] - 1)
+            self.long_term["last_zone_decay"] = today
+
+        favorites = [z for z, c in visits.items() if c >= min_visits]
+        return favorites
+
+    def get_idle_zone_weight(self, zone: str) -> float:
+        """Return weight for idle/sleep zone selection. Favorites get 3×."""
+        visits = self.long_term.get("zone_visits", {})
+        base = 1.0
+        if visits.get(zone, 0) >= 10:
+            base *= 3.0
+        return base
 
     def update_screen_size(self, width: int, height: int) -> None:
         """Update screen dimensions for zone calculation."""

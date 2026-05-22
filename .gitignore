@@ -8,3 +8,6 @@ venv/
 screenshot*.png
 .DS_Store
 generated_wav/
+data/*.json
+data/cat_memory_*.json
+data/cat_territory_*.json

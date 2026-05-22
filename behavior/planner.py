@@ -128,6 +128,11 @@ class BehaviorPlanner:
         pet_timer = cat.get("pet_timer", 0.0)
 
         if pet_timer > 0 and user_near:
+            # ── Phase 3 Social: mood can suppress or boost greeting ──
+            mood_mult = cat.get("mood_multiplier", 1.0)
+            if mood_mult <= 0 or random.random() > mood_mult:
+                # Cat doesn't feel like greeting right now
+                return None
             return ("greet", False, 3)
 
         return None

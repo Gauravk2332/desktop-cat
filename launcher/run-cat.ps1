@@ -79,7 +79,35 @@ Write-Log "CatDir: $CatDir"
 Write-Log "LogDir: $LogDir"
 
 # Save PID for external monitoring
-[System.Diagnostics.Process]::GetCurrentProcess().Id | Out-File $PidFile -Force
+$currentPid = [System.Diagnostics.Process]::GetCurrentProcess().Id
+$currentPid | Out-File $PidFile -Force
+
+# ── Guard: kill any other watchdog that was running ──
+# Prevents duplicate instances when scheduled task is re-run
+$existingPid = $null
+if (Test-Path $PidFile) {
+    try {
+        $existingPid = Get-Content $PidFile -Raw -ErrorAction Stop | ForEach-Object { $_.Trim() }
+    } catch {}
+}
+if ($existingPid -and $existingPid -ne $currentPid) {
+    Write-Log "Found stale watchdog PID=$existingPid — killing..."
+    try {
+        $oldProc = Get-Process -Id $existingPid -ErrorAction Stop
+        # Kill children first (python processes)
+        Get-CimInstance Win32_Process | Where-Object {
+            $_.ParentProcessId -eq $existingPid
+        } | ForEach-Object {
+            try { Stop-Process -Id $_.ProcessId -Force } catch {}
+        }
+        $oldProc.Kill()
+        Write-Log "Killed old watchdog (PID=$existingPid)"
+    } catch {
+        Write-Log "Could not kill old watchdog (PID=$existingPid): $_"
+    }
+}
+# Rewrite PID file now that we own the slot
+$currentPid | Out-File $PidFile -Force
 
 $consecutiveCrashes = 0
 $restartDelay = 0

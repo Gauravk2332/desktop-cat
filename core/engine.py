@@ -26,6 +26,7 @@ import config
 from core.state import CatState, SPEECH_MOODS, default_cat_dict
 import core.navigation as navigation
 from behavior.agent import CatAgent
+from behavior.memory import get_zone_for_position
 from core.sound import SoundManager
 from core.navigation import _spawn_hearts
 from core.toast import notify
@@ -132,6 +133,15 @@ class Engine:
             self._soul_initialized = False
             logging.warning("Soul layer (memory) init failed: %s", e)
 
+        # Owner schedule (Phase 3 learning system)
+        self._schedule = None
+        if config.SCHEDULE_TRACKING_ENABLED:
+            try:
+                from behavior.schedule import OwnerSchedule
+                self._schedule = OwnerSchedule()
+            except ImportError as e:
+                logging.warning("Owner schedule init failed: %s", e)
+
         try:
             from behavior.personality import Personality
             self._personality = Personality(load_from_file=True)
@@ -147,6 +157,31 @@ class Engine:
         except ImportError as e:
             self._soul_initialized = False
             logging.warning("Soul layer (habituation/reactions) init failed: %s", e)
+
+        # ── Phase 3 Social: Mood, Social Referencing, Contagion ──
+        self._mood = None
+        self._social_ref = None
+        self._contagion = None
+        self._rem_twitch_enabled = False
+        try:
+            if config.MOOD_ENABLED:
+                from behavior.mood import MoodState
+                self._mood = MoodState(load_from_file=True)
+        except ImportError as e:
+            logging.warning("Mood init failed: %s", e)
+        try:
+            if config.SOCIAL_REFERENCING_ENABLED:
+                from behavior.social_referencing import SocialReferencing
+                self._social_ref = SocialReferencing()
+        except ImportError as e:
+            logging.warning("Social referencing init failed: %s", e)
+        try:
+            if config.CONTAGION_ENABLED:
+                from behavior.contagion import ContagionMonitor
+                self._contagion = ContagionMonitor()
+        except ImportError as e:
+            logging.warning("Contagion init failed: %s", e)
+        self._rem_twitch_enabled = config.REM_TWITCH_ENABLED
 
         state._mouse_x = 0.0
         state._mouse_y = 0.0
@@ -280,9 +315,19 @@ class Engine:
             if hasattr(self, '_circadian') and self._circadian:
                 self._circadian.update(dt)
 
+            # 0a. Mood update (shared — once per tick)
+            if hasattr(self, '_mood') and self._mood is not None:
+                self._mood.update(dt)
+
             # 1. Run per-cat systems (planner, needs, transitions)
             for cat in s.cats:
                 # 1a. Behavior planner (runs before needs/transitions)
+                # ── Phase 3: Set mood multiplier on cat for planner ──
+                if hasattr(self, '_mood') and self._mood is not None and config.MOOD_ENABLED:
+                    cat["mood_multiplier"] = self._mood.mood_multiplier
+                else:
+                    cat["mood_multiplier"] = 1.0
+
                 if self._planner_initialized and self._planner is not None:
                     energy_mul = 1.0
                     if hasattr(self, '_circadian') and self._circadian:
@@ -308,6 +353,29 @@ class Engine:
                         else:
                             system.update(dt, cat, self.state)
 
+                # 1a-ii. Social referencing (Phase 3)
+                if (hasattr(self, '_social_ref') and self._social_ref is not None
+                        and config.SOCIAL_REFERENCING_ENABLED):
+                    sref_action = self._social_ref.update(
+                        dt, cat, s,
+                        getattr(self, '_personality', None),
+                    )
+                    if sref_action:
+                        self._execute_planner_action(cat, sref_action, dt)
+
+                # 1a-iii. REM twitch check (Phase 3)
+                if self._rem_twitch_enabled:
+                    self._check_rem_twitch(cat, dt)
+
+                # 1a-iv. Zone visit recording (Phase 3 learning — 1% sample)
+                if hasattr(self, '_memory') and cat.get('id', 0) in self._memory:
+                    zone = get_zone_for_position(
+                        cat.get('x', 0), cat.get('y', 0),
+                        s.screen_width, s.screen_height,
+                    )
+                    if random.random() < 0.01:
+                        self._memory[cat['id']].record_zone_visit(zone)
+
             # 1b. Breathe (per cat)
             try:
                 from animation import breathe
@@ -315,6 +383,26 @@ class Engine:
                     breathe.update(dt, cat)
             except ImportError:
                 pass
+
+            # 1c. Schedule recording (Phase 3 — once per tick)
+            if hasattr(self, '_schedule') and self._schedule is not None:
+                hour = datetime.now().hour
+                activity_level = 0.0
+                # Check mouse movement vs previous position
+                mouse_moved = (
+                    abs(s.mouse_pos[0] - getattr(self, '_prev_schedule_mouse', 0.0)) > 5
+                    or abs(s.mouse_pos[1] - getattr(self, '_prev_schedule_mouse_y', 0.0)) > 5
+                )
+                if mouse_moved or len(s.cats) > 0:
+                    activity_level = min(1.0, 0.5 if mouse_moved else 0.1)
+                self._prev_schedule_mouse = s.mouse_pos[0]
+                self._prev_schedule_mouse_y = s.mouse_pos[1]
+                self._schedule.record_activity(hour, activity_level)
+
+            # 1d. Contagion update (Phase 3 — per cat)
+            if hasattr(self, '_contagion') and self._contagion is not None and config.CONTAGION_ENABLED:
+                for c in s.cats:
+                    c["contagion"] = self._contagion.update(dt)
 
             # 2. Weather system (shared — once per tick)
             try:
@@ -697,6 +785,10 @@ class Engine:
         self._mouse_moving = abs(dx_move) > 2 or abs(dy_move) > 2
         self._prev_mouse_pos = QPointF(cursor)
 
+        # Phase 3: record mouse movement for contagion
+        if self._mouse_moving and hasattr(self, '_contagion') and self._contagion is not None:
+            self._contagion.record_input("mouse")
+
         # Check proximity for all cats
         closest_cat = None
         closest_dist = 9999.0
@@ -748,6 +840,10 @@ class Engine:
                     self._memory[cid].record_interaction()
                     self._memory[cid].record_event("pet", (closest_cat["x"], closest_cat["y"]), closest_cat["state"])
                     self._memory[cid].save()
+
+                # ── Phase 3 Social: apply mood from petting ──
+                if hasattr(self, '_mood') and self._mood is not None:
+                    self._mood.apply_interaction("pet")
 
                 # ── Soul layer: habituation check ──
                 _should_react = True
@@ -1216,6 +1312,31 @@ class Engine:
             cat["energy"] = max(0.0, min(100.0, cat.get("energy", 80.0)))
             cat["hunger"] = max(0.0, min(100.0, cat.get("hunger", 20.0)))
             cat["boredom"] = max(0.0, min(100.0, cat.get("boredom", 0.0)))
+
+    # ── REM Twitch helper ────────────────────────────────────────────────
+
+    def _check_rem_twitch(self, cat: dict, dt: float) -> None:
+        """During deep sleep, random chance of REM twitch. Sets cat rem_twitch flags."""
+        if not self._rem_twitch_enabled:
+            return
+        if cat.get("state") != config.STATE_SLEEP:
+            # Clear REM state if cat is awake
+            if cat.get("rem_twitch"):
+                cat["rem_twitch"] = False
+                cat["rem_twitch_timer"] = 0.0
+            return
+        if not cat.get("deep_sleep", False):
+            return
+        # Random REM: 2% chance per tick during deep sleep
+        if random.random() < 0.02 and not cat.get("rem_twitch"):
+            cat["rem_twitch"] = True
+            cat["rem_twitch_timer"] = random.uniform(0.5, 1.0)
+            return
+        # Timer management
+        if cat.get("rem_twitch"):
+            cat["rem_twitch_timer"] = max(0.0, cat.get("rem_twitch_timer", 0.0) - dt)
+            if cat["rem_twitch_timer"] <= 0:
+                cat["rem_twitch"] = False
 
     # ── System idle detection ───────────────────────────────────────────
 

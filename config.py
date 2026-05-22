@@ -371,3 +371,21 @@ HUNGER_URGENT_THRESHOLD = 80
 ENERGY_CRITICAL_THRESHOLD = 20
 BOREDOM_ERRATIC_THRESHOLD = 80
 FEED_HUNGER_REDUCTION = 30          # Hunger reduced per Ctrl+F press
+
+# ─── Phase 3: Learning Systems ──────────────────────────────────────────────
+FAVORITE_ZONE_THRESHOLD = 10    # visits to mark as favorite
+FAVORITE_ZONE_WEIGHT = 3.0     # multiplier for idle selection
+ZONE_VISIT_DECAY_PER_DAY = 1    # daily visit decay
+SCHEDULE_TRACKING_ENABLED = True
+SCHEDULE_FILE = os.path.join(
+    os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
+    "Nova", "desktop-cat", "owner_schedule.json"
+)
+
+
+# ─── Phase 3: Social + Mood + Contagion + REM ──────────────────────────
+MOOD_ENABLED = True
+SOCIAL_REFERENCING_ENABLED = True
+CONTAGION_ENABLED = True
+REM_TWITCH_ENABLED = True
+MOOD_SAVE_INTERVAL = 300.0  # seconds between mood auto-saves
