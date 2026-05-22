@@ -86,6 +86,24 @@ class Engine:
         # Agent system (optional — replaces hardcoded state transitions)
         self._agent = None
 
+        # Behavior planner + circadian clock
+        self._planner_initialized = False
+        self._planner = None
+        self._circadian = None
+        try:
+            from behavior.planner import BehaviorPlanner
+            self._planner = BehaviorPlanner()
+            self._planner_initialized = True
+        except ImportError:
+            pass
+
+        if config.CIRCADIAN_ENABLED:
+            try:
+                from core.circadian import CircadianClock
+                self._circadian = CircadianClock()
+            except ImportError:
+                pass
+
         # Main tick timer
         self._tick_timer = QTimer(window)
         self._tick_timer.timeout.connect(self._on_tick)
@@ -98,6 +116,38 @@ class Engine:
 
         # Vocalization system
         self._vocalization = VocalizationSystem(state)
+
+        # ── Soul layer: Memory, Personality, Habituation, Reactions ──
+        self._soul_initialized = True
+        self._memory: dict = {}
+        self._personality = None
+        self._habituation = None
+        self._reactions = None
+        try:
+            from behavior.memory import CatMemory
+            for cat in state.cats:
+                cid = cat.get("id", 0)
+                self._memory[cid] = CatMemory(cat_id=cid)
+        except ImportError as e:
+            self._soul_initialized = False
+            logging.warning("Soul layer (memory) init failed: %s", e)
+
+        try:
+            from behavior.personality import Personality
+            self._personality = Personality(load_from_file=True)
+        except ImportError as e:
+            self._soul_initialized = False
+            logging.warning("Soul layer (personality) init failed: %s", e)
+
+        try:
+            from behavior.habituation import HabituationModule
+            from behavior.reactions import ReactionSystem
+            self._habituation = HabituationModule()
+            self._reactions = ReactionSystem(self._personality)
+        except ImportError as e:
+            self._soul_initialized = False
+            logging.warning("Soul layer (habituation/reactions) init failed: %s", e)
+
         state._mouse_x = 0.0
         state._mouse_y = 0.0
 
@@ -226,11 +276,37 @@ class Engine:
         s = self.state
 
         try:
-            # 1. Run per-cat systems (needs, transitions)
+            # 0. Circadian clock (shared — once per tick)
+            if hasattr(self, '_circadian') and self._circadian:
+                self._circadian.update(dt)
+
+            # 1. Run per-cat systems (planner, needs, transitions)
             for cat in s.cats:
+                # 1a. Behavior planner (runs before needs/transitions)
+                if self._planner_initialized and self._planner is not None:
+                    energy_mul = 1.0
+                    if hasattr(self, '_circadian') and self._circadian:
+                        energy_mul = self._circadian.energy_multiplier
+                    action, is_seq, priority = self._planner.update(
+                        dt, cat, self.state,
+                        circadian=getattr(self, '_circadian', None),
+                        personality=getattr(self, '_personality', None),
+                        memory=self._memory.get(cat.get('id', 0)) if hasattr(self, '_memory') else None,
+                    )
+                    if action != "idle":
+                        self._execute_planner_action(cat, action, dt)
+
+                # Compute circadian energy multiplier for needs
+                _energy_mul_for_needs = 1.0
+                if hasattr(self, '_circadian') and self._circadian:
+                    _energy_mul_for_needs = self._circadian.energy_multiplier
                 for name, system in self.systems.items():
                     if name in ("needs", "transitions"):
-                        system.update(dt, cat, self.state)
+                        if name == "needs":
+                            system.update(dt, cat, self.state,
+                                          circadian_energy_multiplier=_energy_mul_for_needs)
+                        else:
+                            system.update(dt, cat, self.state)
 
             # 1b. Breathe (per cat)
             try:
@@ -646,6 +722,12 @@ class Engine:
                 )
                 cat["eye_target"] = target
 
+            # ── Soul layer: record mouse proximity events (1% sample) ──
+            if cat.get("mouse_near") and hasattr(self, '_memory'):
+                _cid = cat.get("id", 0)
+                if _cid in self._memory and random.random() < 0.01:
+                    self._memory[_cid].record_event("mouse_near", (cat["x"], cat["y"]), cat["state"])
+
             # Track closest non-sleeping cat for pet detection
             if dist < closest_dist and cat["state"] not in (
                 config.STATE_SLEEP, config.STATE_CHASE, config.STATE_PLAY
@@ -659,23 +741,48 @@ class Engine:
             last = closest_cat.get("last_interaction", 0.0)
             if now - last > 1.0:
                 closest_cat["last_interaction"] = now
-                closest_cat["boredom"] = 0.0
-                consec = closest_cat.get("consecutive_pets", 0)
-                if consec >= 5:
-                    navigation.trigger_purr(closest_cat, s)
-                    closest_cat["consecutive_pets"] = 0
-                elif random.random() < 0.4:
-                    navigation.trigger_purr(closest_cat, s)
-                    try:
-                        self.sound.play("purr")
-                    except Exception:
-                        pass
-                    closest_cat["consecutive_pets"] = consec + 1
-                navigation._spawn_hearts_for_cat(closest_cat)
-                if closest_cat.get("speech_cooldown", 0) <= 0:
-                    self._trigger_speech("happy",
-                        cat_idx=s.cats.index(closest_cat))
-                    closest_cat["speech_cooldown"] = config.SPEECH_PROXIMITY_COOLDOWN
+
+                # ── Soul layer: record interaction in memory ──
+                cid = closest_cat.get("id", 0)
+                if hasattr(self, '_memory') and cid in self._memory:
+                    self._memory[cid].record_interaction()
+                    self._memory[cid].record_event("pet", (closest_cat["x"], closest_cat["y"]), closest_cat["state"])
+                    self._memory[cid].save()
+
+                # ── Soul layer: habituation check ──
+                _should_react = True
+                if hasattr(self, '_habituation') and self._habituation is not None:
+                    self._habituation.record_interaction("click")
+                    resp_level = self._habituation.get_response_level("click")
+                    if resp_level >= 3:
+                        _should_react = False
+
+                # ── Soul layer: pre-reaction cues ──
+                if _should_react and hasattr(self, '_reactions') and self._reactions is not None:
+                    delay = self._reactions.get_reaction_delay("click")
+                    pre_reaction = self._reactions.get_pre_reaction()
+                    if pre_reaction and pre_reaction[0] is not None:
+                        closest_cat["reaction_type"] = pre_reaction[0]
+                        closest_cat["reaction_timer"] = pre_reaction[1]
+
+                if _should_react:
+                    closest_cat["boredom"] = 0.0
+                    consec = closest_cat.get("consecutive_pets", 0)
+                    if consec >= 5:
+                        navigation.trigger_purr(closest_cat, s)
+                        closest_cat["consecutive_pets"] = 0
+                    elif random.random() < 0.4:
+                        navigation.trigger_purr(closest_cat, s)
+                        try:
+                            self.sound.play("purr")
+                        except Exception:
+                            pass
+                        closest_cat["consecutive_pets"] = consec + 1
+                    navigation._spawn_hearts_for_cat(closest_cat)
+                    if closest_cat.get("speech_cooldown", 0) <= 0:
+                        self._trigger_speech("happy",
+                            cat_idx=s.cats.index(closest_cat))
+                        closest_cat["speech_cooldown"] = config.SPEECH_PROXIMITY_COOLDOWN
 
         # Proximity speech trigger (mouse nearby, not close enough to pet)
         for cat in s.cats:
@@ -702,8 +809,9 @@ class Engine:
             dist0 = math.hypot(dx0, dy0)
 
             if dist0 < 80 and cat0["state"] == config.STATE_SIT:
+                approach_chance = self._personality.get_approach_chance() if (hasattr(self, '_personality') and self._personality is not None) else 0.01
                 if (time.monotonic() - cat0.get("last_interaction", 0.0) > 3.0 and
-                    random.random() < 0.01):
+                    random.random() < approach_chance):
                     cat0["facing"] = cursor.x() > cx0
                     cat0["state"] = config.STATE_WALK
                     cat0["walk_duration"] = max(0.8, random.uniform(1.5, 3.0))
@@ -841,6 +949,128 @@ class Engine:
                 cat["coat"] = coat_idx
         except ImportError:
             pass
+
+    # ── Planner action execution ──────────────────────────────────────────
+
+    _NON_INTERRUPTIBLE = {config.STATE_CHASE, config.STATE_PLAY}
+
+    def _execute_planner_action(self, cat: dict, action: str, dt: float) -> None:
+        """Translate a planner action into engine state changes.
+
+        Planner returns high-level actions like "sleep", "sit", "walk_to_food".
+        This method maps them to concrete state transitions.
+
+        Compatible states guard: never interrupt chase/play, and only wake
+        sleeping cats when the action is explicitly compatible.
+        """
+        current = cat["state"]
+
+        # Never interrupt chase or play via planner
+        if current in self._NON_INTERRUPTIBLE:
+            return
+
+        # Don't wake sleeping cat (only self-transition to sleep is OK)
+        if current == config.STATE_SLEEP and action != "sleep":
+            return
+
+        # ── Major state transitions ──
+        if action == "sleep":
+            if current not in (config.STATE_SLEEP,):
+                cat["state"] = config.STATE_SLEEP
+                cat["deep_sleep"] = True
+                cat["sleep_breath"] = 0.0
+                cat["zzz_particles"] = []
+                cat["at_home"] = False
+
+        elif action == "sit":
+            if current in (config.STATE_WALK, config.STATE_WANDER, config.STATE_GO_HOME):
+                cat["state"] = "SIT"
+                cat["walk_duration"] = 0.0
+                cat["walk_elapsed"] = 0.0
+
+        elif action == "walk_to_food":
+            if current == "SIT":
+                s = self.state
+                cat["state"] = config.STATE_WALK
+                cat["walk_target_x"] = float(s.screen_width) / 2.0
+                cat["walk_target_y"] = float(s.screen_height) - config.CAT_BASELINE - 20
+                cat["walk_duration"] = 3.0
+                cat["walk_elapsed"] = 0.0
+                cat["walk_accel"] = 0.0
+                cat["walk_pause"] = False
+                cat["walk_frame"] = 0
+                cat["walk_accum"] = 0.0
+                cat["walk_vy"] = random.uniform(-0.3, 0.3)
+                cat["facing"] = cat["walk_target_x"] > cat["x"]
+
+        elif action == "play":
+            if current == "SIT":
+                cat["state"] = config.STATE_PLAY
+                cat["toy_target"] = (
+                    cat["x"] + random.uniform(-80, 80),
+                    cat["y"] + random.uniform(-40, 40),
+                )
+                cat["toy_active"] = True
+                cat["toy_type"] = "ball"
+                cat["toy_timer"] = 5.0
+
+        elif action == "greet":
+            cat["state"] = "SIT"
+            cat["purr_vibrate"] = 1.0
+            cat["walk_duration"] = 0.0
+            cat["walk_elapsed"] = 0.0
+            try:
+                self.sound.play("purr")
+            except Exception:
+                pass
+
+        elif action == "window_watch":
+            cat["state"] = "SIT"
+            cat["facing"] = False  # face west (left)
+            cat["walk_duration"] = 0.0
+            cat["walk_elapsed"] = 0.0
+
+        elif action == "patrol":
+            if current in ("SIT", config.STATE_WALK, config.STATE_WANDER):
+                cat["state"] = config.STATE_WALK
+                cat["walk_target_x"] = cat["x"] + random.uniform(-100, 100)
+                cat["walk_target_y"] = cat["y"] + random.uniform(-30, 30)
+                cat["walk_duration"] = random.uniform(2.0, 4.0)
+                cat["walk_elapsed"] = 0.0
+                cat["walk_vy"] = random.uniform(-0.3, 0.3)
+                cat["facing"] = cat["walk_target_x"] > cat["x"]
+
+        # ── Micro-reactions (can happen from SIT, WALK, WANDER) ──
+        elif action == "groom":
+            cat["reaction_type"] = "groom"
+            cat["reaction_timer"] = 2.0
+
+        elif action == "ear_twitch":
+            cat["reaction_type"] = "ear_twitch"
+            cat["reaction_timer"] = 0.3
+
+        elif action == "slow_blink":
+            cat["blinking"] = True
+            cat["blink_timer"] = 0.0
+            cat["next_blink"] = 3.0
+
+        elif action == "tail_twitch":
+            cat["reaction_type"] = "tail_twitch"
+            cat["reaction_timer"] = 0.5
+
+        elif action == "weight_shift":
+            cat["reaction_type"] = "weight_shift"
+            cat["reaction_timer"] = 0.4
+
+        elif action == "look_around":
+            cat["reaction_type"] = "look_around"
+            cat["reaction_timer"] = 0.6
+
+        elif action == "stare":
+            cat["reaction_type"] = "stare"
+            cat["reaction_timer"] = 1.0
+
+        # "idle" is a no-op
 
     # ── Agent system ────────────────────────────────────────────────────
 

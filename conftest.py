@@ -95,3 +95,24 @@ def frame_timing_benchmark():
             "timings": timings,
         }
     return _run
+
+# ── QApplication fixture (for engine tests that need real widgets) ──
+
+@pytest.fixture(scope="session")
+def qapp():
+    """Return a singleton QApplication instance for the test session."""
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    return app
+
+# ── QApplication singleton (must exist before any QWidget creation) ──
+
+def _ensure_qapp():
+    """Ensure a QApplication exists before any engine test."""
+    from PyQt6.QtWidgets import QApplication
+    if QApplication.instance() is None:
+        QApplication([])
+
+_ensure_qapp()

@@ -53,20 +53,29 @@ def _is_owner_afk(state) -> bool:
     return (time.monotonic() - state.last_interaction) > config.AFK_THRESHOLD
 
 
-def update(dt: float, state_or_cat, state=None) -> None:
+def update(dt: float, state_or_cat, state=None, circadian_energy_multiplier: float = 1.0) -> None:
     """Decay or recharge needs for a specific cat.
 
     Two calling modes:
       update(dt, state)           — legacy: cats[0]
       update(dt, cat_dict, state) — per-cat
+
+    Args:
+        dt: Delta time in seconds.
+        state_or_cat: CatState (legacy) or cat dict (per-cat).
+        state: CatState when using per-cat mode (optional).
+        circadian_energy_multiplier: Circadian modulation factor (0.0-1.0).
+            Energy drain multiplied by this (lower = slower drain at night).
+            Hunger drain multiplied by inverse (hungrier during active hours).
+            Default 1.0 (no modulation).
     """
     cat, s = _resolve(state_or_cat, state)
 
     tod = _get_tod_multipliers()
     wea = _get_weather_multipliers(s)
 
-    energy_mul = tod.get("energy", 1.0) * wea.get("energy", 1.0)
-    hunger_mul = tod.get("hunger", 1.0) * wea.get("hunger", 1.0)
+    energy_mul = tod.get("energy", 1.0) * wea.get("energy", 1.0) * circadian_energy_multiplier
+    hunger_mul = tod.get("hunger", 1.0) * wea.get("hunger", 1.0) * (1.0 / max(0.1, circadian_energy_multiplier))
     boredom_mul = tod.get("boredom", 1.0) * wea.get("boredom", 1.0)
 
     # ── Energy ─────────────────────────────────────────────────────
