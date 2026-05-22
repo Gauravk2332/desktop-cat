@@ -10,6 +10,7 @@ import logging
 import time
 import urllib.request
 import urllib.error
+from typing import Optional
 
 
 # ── Internal cache ───────────────────────────────────────────────────
@@ -52,6 +53,58 @@ def fetch_weather(city: str = "Mumbai") -> dict | None:
     logger.warning("Weather fetch failed after %d retries: %s",
                    config.WEATHER_RETRIES, last_error)
     return None
+
+
+class WeatherSystem:
+    """Weather-aware response system. Wraps existing weather functions."""
+
+    def __init__(self):
+        self._current = "clear"
+        self._storm_timer = 0.0
+
+    def update(self, dt, cat_dict=None):
+        """Update weather state from existing system."""
+        import core.weather as weather_mod
+        condition = weather_mod.get_weather_condition()
+        if condition != "unknown":
+            self._current = condition
+
+    def _get_cat_action(self, cat: dict) -> Optional[str]:
+        """Return action based on weather/cat state."""
+        return None
+
+    def check_storm_response(self, cat: dict) -> Optional[str]:
+        """Return action for storm response. 'go_home'/'hide'/'walk_off_screen' if stormy."""
+        if self._current in ("stormy", "thunderstorm"):
+            return "walk_off_screen"
+        return None
+
+    def get_sequence_boost(self, sequence_name: str) -> float:
+        """Return probability multiplier for a sequence based on weather."""
+        if sequence_name == "WindowWatch":
+            if self._current == "sunny":
+                return 2.0
+            elif self._current in ("rainy",):
+                return 0.5
+        return 1.0
+
+    def advance_storm(self, cat: dict, dt: float) -> None:
+        """Advance storm hiding timer. Return cat to normal when expired."""
+        cat["storm_timer"] = cat.get("storm_timer", _get_storm_duration()) - dt
+        if cat["storm_timer"] <= 0:
+            cat["state"] = "SIT"
+            cat["storm_timer"] = 0.0
+            cat["x"] = 800
+            cat["y"] = 500
+
+    def get_palette_hint(self) -> Optional[dict]:
+        """Return optional palette hint based on weather."""
+        return None
+
+    @staticmethod
+    def _get_storm_duration() -> float:
+        """Return the duration a cat should hide during storm."""
+        return _get_storm_duration()
 
 
 def get_weather_condition() -> str:
@@ -146,6 +199,12 @@ def update(dt: float, state) -> None:
                 state.weather_temp = int(_WEATHER_CACHE["current_condition"][0]["temp_C"])
         except (KeyError, IndexError, TypeError, ValueError):
             pass
+
+
+def _get_storm_duration() -> float:
+    """Return the duration a cat should hide during storm."""
+    import config
+    return config.STORM_HIDE_TIME
 
 
 def get_weather_for_display(state) -> str:

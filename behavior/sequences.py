@@ -25,20 +25,20 @@ MORNING_WAKE = [
     {"action": "yawn",       "duration": 2.7, "can_interrupt": True},
     {"action": "sit",        "duration": 1.0, "can_interrupt": True},
     {"action": "look_around", "duration": 2.0, "can_interrupt": True},
-    {"action": "meow",       "duration": 0.5, "can_interrupt": True},
+    {"action": "meow",       "duration": 0.5, "can_interrupt": True, "sound": "meow_greeting"},
 ]
 
 HUNGER_WALK = [
     {"action": "stand",      "duration": 0.8, "can_interrupt": True},
     {"action": "walk_to_food","duration": 5.0, "can_interrupt": False},
-    {"action": "eat",        "duration": 4.0, "can_interrupt": False},
+    {"action": "eat",        "duration": 4.0, "can_interrupt": False, "sound": "eat_crunch"},
     {"action": "groom_face",  "duration": 3.0, "can_interrupt": True},
     {"action": "sit",        "duration": 2.0, "can_interrupt": True},
 ]
 
 PLAY_BURST = [
     {"action": "stalk",      "duration": 2.0, "can_interrupt": True},
-    {"action": "pounce",     "duration": 1.0, "can_interrupt": True},
+    {"action": "pounce",     "duration": 1.0, "can_interrupt": True, "sound": "meow_short"},
     {"action": "bat",        "duration": 3.0, "can_interrupt": True},
     {"action": "bunny_kick",  "duration": 2.5, "can_interrupt": True},
     {"action": "groom_fur",   "duration": 4.0, "can_interrupt": True},
@@ -50,7 +50,7 @@ GROOM_SESSION = [
     {"action": "paw_lick",   "duration": 2.0, "can_interrupt": True},
     {"action": "paw_lick",   "duration": 2.0, "can_interrupt": True},
     {"action": "paw_lick",   "duration": 2.0, "can_interrupt": True},
-    {"action": "rub_face",   "duration": 3.0, "can_interrupt": True},
+    {"action": "rub_face",   "duration": 3.0, "can_interrupt": True, "sound": "purr_deep", "loop": True},
     {"action": "shake",      "duration": 1.0, "can_interrupt": True},
     {"action": "sit",        "duration": 2.0, "can_interrupt": True},
 ]
@@ -58,7 +58,7 @@ GROOM_SESSION = [
 SLEEP_SEQUENCE = [
     {"action": "lie_down",   "duration": 1.5, "can_interrupt": True},
     {"action": "curl",       "duration": 2.0, "can_interrupt": True},
-    {"action": "deep_sleep",  "duration": 600.0, "can_interrupt": True},
+    {"action": "deep_sleep",  "duration": 600.0, "can_interrupt": True, "sound": "purr_deep", "loop": True},
     {"action": "rem_sleep",  "duration": 60.0, "can_interrupt": True},
     {"action": "rem_sleep",  "duration": 60.0, "can_interrupt": True},
     {"action": "rem_sleep",  "duration": 60.0, "can_interrupt": True},
@@ -71,14 +71,14 @@ GREETING_USER = [
     {"action": "walk_to_user","duration": 4.0, "can_interrupt": True},
     {"action": "sit_near_user","duration": 2.0, "can_interrupt": True},
     {"action": "slow_blink",  "duration": 1.5, "can_interrupt": True},
-    {"action": "chirp",      "duration": 0.5, "can_interrupt": True},
+    {"action": "chirp",      "duration": 0.5, "can_interrupt": True, "sound": "meow_greeting"},
 ]
 
 WINDOW_WATCH = [
     {"action": "walk_to_window","duration": 3.0, "can_interrupt": True},
     {"action": "sit_look",   "duration": 30.0, "can_interrupt": True},
     {"action": "head_track",  "duration": 15.0, "can_interrupt": True},
-    {"action": "chirp",      "duration": 0.5, "can_interrupt": True},
+    {"action": "chirp",      "duration": 0.5, "can_interrupt": True, "sound": "chirp_excited"},
     {"action": "tail_twitch", "duration": 2.0, "can_interrupt": True},
 ]
 
@@ -157,10 +157,74 @@ def get_best_sequence(cat: dict, state) -> Optional[list]:
     return None
 
 
+# ─── Sequence Class Wrappers ────────────────────────────────────────
+# These wrap the dict-based sequence constants into objects with .steps
+# returning tuples (action, duration, metadata) for test compatibility.
+
+def _to_steps(seq_list):
+    """Convert dict-based sequence list to tuple-based steps.
+
+    Each step dict becomes a tuple:
+        Without sound: (action, duration)
+        With sound:    (action, duration, {can_interrupt, sound, loop})
+    """
+    steps = []
+    for d in seq_list:
+        action = d["action"]
+        duration = d["duration"]
+        if "sound" in d:
+            meta = {"can_interrupt": d.get("can_interrupt", True)}
+            meta["sound"] = d["sound"]
+            if d.get("loop"):
+                meta["loop"] = True
+            steps.append((action, duration, meta))
+        else:
+            steps.append((action, duration))
+    return steps
+
+
+class BaseSequence:
+    """Base for sequence wrapper classes."""
+    _DATA = []
+
+    def __init__(self, cat_id: int = 0):
+        self.cat_id = cat_id
+        self.steps = _to_steps(self._DATA)
+
+
+class MorningWake(BaseSequence):
+    _DATA = MORNING_WAKE
+
+
+class HungerWalk(BaseSequence):
+    _DATA = HUNGER_WALK
+
+
+class GroomSession(BaseSequence):
+    _DATA = GROOM_SESSION
+
+
+class WindowWatch(BaseSequence):
+    _DATA = WINDOW_WATCH
+
+
+class GreetingUser(BaseSequence):
+    _DATA = GREETING_USER
+
+
+class PlayBurst(BaseSequence):
+    _DATA = PLAY_BURST
+
+
+class SleepSequence(BaseSequence):
+    _DATA = SLEEP_SEQUENCE
+
+
 class SequenceRunner:
     """Executes a behavioral sequence step by step."""
 
-    def __init__(self):
+    def __init__(self, cat_id: int = 0):
+        self.cat_id = cat_id
         self.sequence: Optional[list] = None
         self.step_index: int = 0
         self.step_timer: float = 0.0
@@ -171,6 +235,18 @@ class SequenceRunner:
         """Start a new sequence from the beginning."""
         self.name = name
         self.sequence = sequence
+        self.step_index = 0
+        self.step_timer = 0.0
+        self.running = True
+
+    def start_sequence(self, seq) -> None:
+        """Start a sequence from a sequence wrapper object."""
+        if hasattr(seq, '_DATA'):
+            self.sequence = seq._DATA
+        elif hasattr(seq, 'steps'):
+            self.sequence = seq.steps
+        else:
+            self.sequence = seq
         self.step_index = 0
         self.step_timer = 0.0
         self.running = True

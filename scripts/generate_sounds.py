@@ -317,6 +317,47 @@ def gen_alert():
     return samples
 
 
+def gen_purr_deep():
+    """3s loop, deep low frequency hum (50-100Hz sine + noise)."""
+    n = int(SAMPLE_RATE * 3.0)
+    samples = []
+    for i in range(n):
+        t = i / SAMPLE_RATE
+        # Sweep from 50Hz to 100Hz slowly
+        freq = 50 + 50 * (i / n)
+        s = 0.60 * math.sin(2 * math.pi * freq * t)
+        s += 0.25 * math.sin(2 * math.pi * freq * 2 * t)  # harmonic
+        s += 0.15 * random.uniform(-1.0, 1.0)  # subtle noise
+        samples.append(MAX_AMP * s)
+    return apply_fade(samples, fade_in=0.3, fade_out=0.1)
+
+
+def gen_chirp_excited():
+    """0.2s high-pitched chirp (2kHz -> 4kHz sweep)."""
+    n = int(SAMPLE_RATE * 0.2)
+    samples = []
+    for i in range(n):
+        t = i / SAMPLE_RATE
+        freq = 2000 + 2000 * (i / n)
+        env = math.sin(math.pi * i / n)
+        samples.append(MAX_AMP * 0.50 * env * math.sin(2 * math.pi * freq * t))
+    return apply_fade(samples, fade_out=0.02)
+
+
+def gen_meow_demand():
+    """0.6s insistent meow (rising pitch), demanding tone."""
+    n = int(SAMPLE_RATE * 0.6)
+    samples = []
+    for i in range(n):
+        t = i / SAMPLE_RATE
+        freq = 400 + 400 * (i / n)  # 400->800Hz rising
+        env = 0.5 + 0.5 * math.sin(math.pi * i / n)
+        s = 0.60 * math.sin(2 * math.pi * freq * t)
+        s += 0.25 * math.sin(2 * math.pi * freq * 1.5 * t)  # harmonic
+        samples.append(MAX_AMP * 0.70 * env * s)
+    return apply_fade(samples, fade_in=0.02, fade_out=0.06)
+
+
 def gen_yawn():
     """Descending yawn ~0.6s."""
     n = int(SAMPLE_RATE * 0.6)
@@ -331,8 +372,10 @@ def gen_yawn():
 
 GENERATORS = [
     ("purr.wav", gen_purr),
+    ("purr_deep.wav", gen_purr_deep),
     ("trill.wav", gen_trill),
     ("chirp.wav", gen_chirp),
+    ("chirp_excited.wav", gen_chirp_excited),
     ("chatter.wav", gen_chatter),
     ("hiss.wav", gen_hiss),
     ("growl.wav", gen_growl),
@@ -341,6 +384,7 @@ GENERATORS = [
     ("meow_plaintive.wav", gen_meow_plaintive),
     ("meow_short.wav", gen_meow_short),
     ("meow_long.wav", gen_meow_long),
+    ("meow_demand.wav", gen_meow_demand),
     ("footstep.wav", gen_footstep),
     ("footstep2.wav", gen_footstep2),
     ("sleep_breathing.wav", gen_sleep_breathing),

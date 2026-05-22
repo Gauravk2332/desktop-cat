@@ -340,6 +340,12 @@ WEATHER_RETRIES = 3                  # Fetch retry count
 WEATHER_RETRY_DELAY = 2.0           # Seconds between retries
 
 
+# ─── Phase 5: Sound & Weather Config ─────────────────────────────────
+SOUND_ENABLED = True
+WEATHER_ENABLED = True
+STORM_HIDE_TIME = 4.0  # seconds — minimum storm hiding duration
+
+
 # ─── Smart Needs: Time-of-Day Multipliers ──────────────────────────────────
 # Each tuple: (start_hour, end_hour, multiplier)
 # Applied to base drain rate: base_rate * tod_mul * weather_mul
@@ -381,6 +387,12 @@ SCHEDULE_FILE = os.path.join(
     os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
     "Nova", "desktop-cat", "owner_schedule.json"
 )
+
+
+# ─── Phase 5: Sound + Weather ──────────────────────────────────────────────
+SOUND_ENABLED = True
+WEATHER_ENABLED = True
+STORM_HIDE_TIME = 5.0
 
 
 # ─── Phase 3: Social + Mood + Contagion + REM ──────────────────────────

@@ -223,8 +223,14 @@ class TestSoulLayerIntegration:
         bold_r = ReactionSystem(bold)
         shy_r = ReactionSystem(shy)
 
-        assert bold_r.get_reaction_delay("click") < shy_r.get_reaction_delay("click"), \
-            "Bold should be faster"
+        # Average over 10 calls to smooth random variance
+        bold_delays = [bold_r.get_reaction_delay("click") for _ in range(10)]
+        shy_delays = [shy_r.get_reaction_delay("click") for _ in range(10)]
+        bold_avg = sum(bold_delays) / len(bold_delays)
+        shy_avg = sum(shy_delays) / len(shy_delays)
+
+        assert bold_avg < shy_avg, \
+            f"Bold avg ({bold_avg:.3f}) should be < shy avg ({shy_avg:.3f})"
 
     def test_habituation_blocks_after_rapid_clicks(self):
         """5 rapid clicks should trigger ignore level."""

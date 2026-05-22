@@ -33,11 +33,15 @@ class SoundManager:
 
     def __init__(self):
         self._enabled = True
+        self.volume = 1.0
         self._can_winsound = False
         self._can_qse = False
         self._detect_backends()
         self._player = None  # QSoundEffect instance for looping
+        self._loops: dict = {}  # track named loops for stop_looped
         self._active_shots: list = []  # keep one-shot QSE effects alive
+        self._loops: dict = {}  # name -> player for active loops
+        self.volume: float = 1.0
         logger.info("SoundManager: winsound=%s qsoundeffect=%s",
                      self._can_winsound, self._can_qse)
 
@@ -123,6 +127,70 @@ class SoundManager:
                 pass
             self._player = None
 
+    # ── Phase 5: Step-based sound API ──────────────────────────
+
+    def play_sound(self, name: str):
+        """Play a one-shot sound by name. Delegates to play()."""
+        self.play(name)
+
+    def play_looped(self, name: str):
+        """Start looping a sound by name."""
+        if not self._enabled:
+            return
+
+        path = self._resolve_path(name)
+        if path is None:
+            return
+
+        self.stop_looped(name)
+        if self._can_qse:
+            self._start_loop_qse(path)
+            self._loops[name] = self._player
+        else:
+            logger.warning("No loop backend available for %s", name)
+
+    def stop_looped(self, name: str):
+        """Stop a specific looped sound by name."""
+        player = self._loops.pop(name, None)
+        if player is not None:
+            try:
+                player.stop()
+            except RuntimeError:
+                pass
+        if self._player is not None and self._player is player:
+            self._player = None
+
+    def play_step_sound(self, name: str, loop: bool = False):
+        """Play a step sound by name. Optionally loop."""
+        if not self._enabled:
+            return
+
+        if not self._file_exists(name):
+            import logging as _lg
+            _lg.warning("Sound not found (step): %s", name)
+            return
+
+        if loop:
+            self.play_looped(name)
+        else:
+            self.play_sound(name)
+
+    def stop_step_sound(self, name: str):
+        """Stop a previously started step sound."""
+        self.stop_looped(name)
+
+    def _file_exists(self, name: str) -> bool:
+        """Check if a WAV file exists for the given sound name."""
+        path = os.path.join(SOUNDS_DIR, name)
+        if os.path.exists(path):
+            return True
+        path = os.path.join(SOUNDS_DIR, f"{name}.wav")
+        return os.path.exists(path)
+
+    def _get_volume_multiplier(self) -> float:
+        """Return current volume multiplier."""
+        return self.volume
+
     # ── Path Resolution ───────────────────────────────────────
 
     def _resolve_path(self, name: str) -> Optional[str]:
@@ -189,5 +257,7 @@ class SoundManager:
     def cleanup(self):
         """Stop any active sound playback and release resources."""
         self.stop_loop()
+        for name in list(self._loops):
+            self.stop_looped(name)
         self._active_shots.clear()
         logger.debug("SoundManager cleaned up")
