@@ -33,7 +33,7 @@ class CatTrayIcon:
 
         # Sync tray state with window visibility
         if self.window is not None:
-            self.window.visibleChanged.connect(self._on_visibility_changed)
+            self.window.visibility_changed.connect(self._on_visibility_changed)
 
     def _build_menu(self):
         self.act_show = QAction("Show Cat", checkable=True)

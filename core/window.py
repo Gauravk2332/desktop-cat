@@ -20,7 +20,7 @@ if sys.platform == "win32":
 logging.basicConfig(level=logging.WARNING)
 
 from PyQt6.QtWidgets import QWidget, QApplication
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPainter, QPainterPath, QColor, QPen, QFont
 
 import config
@@ -35,6 +35,16 @@ from core.controls import Controls
 
 class CatWindow(QWidget):
     """Full-screen transparent overlay — the cats live here."""
+
+    visibility_changed = pyqtSignal(bool)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.visibility_changed.emit(True)
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.visibility_changed.emit(False)
 
     def __init__(self, state: CatState, engine=None):
         super().__init__()
