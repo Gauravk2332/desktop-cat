@@ -65,7 +65,7 @@ STATE_DIR = os.path.join(
 STATE_PATH = os.path.join(STATE_DIR, "state.json")
 
 # ─── HTTP API ─────────────────────────────────────────────────────────────
-API_PORT = 18789
+API_PORT = 65432
 
 # ─── Hut / Home (screen-relative) ─────────────────────────────────────────
 HUT_WIDTH     = 60    # total hut width in px

@@ -151,6 +151,21 @@ class _APIHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "state not available"}, 503)
             return
+        elif action == "agent_action":
+            action_type = data.get("action_type", "SIT")
+            params = data.get("params", {})
+            agent_response = data.get("response", "")
+            engine = _ENGINE
+            if engine and hasattr(engine, '_execute_agent_action'):
+                cat = _STATE.cats[0] if _STATE and _STATE.cats else None
+                if cat:
+                    engine._execute_agent_action(cat, action_type, params, 0.016)
+                    self._send_json({"status": "ok", "action_type": action_type})
+                else:
+                    self._send_json({"error": "no cats"}, 400)
+            else:
+                self._send_json({"error": "engine not ready"}, 503)
+            return
         elif action in ("pet", "feed", "wake"):
             action_queue.put(action)
             self._send_json({"status": "ok", "action": action})
@@ -161,6 +176,6 @@ class _APIHandler(BaseHTTPRequestHandler):
 
 def start_api():
     """Start the HTTP server daemon on the configured port."""
-    server = HTTPServer(("127.0.0.1", config.API_PORT), _APIHandler)
+    server = HTTPServer(("0.0.0.0", config.API_PORT), _APIHandler)
     t = Thread(target=server.serve_forever, daemon=True, name="cat-api")
     t.start()
