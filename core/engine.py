@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import QApplication
 
 import config
 from core.state import CatState
-from core.api import action_queue
+import core.navigation as navigation
 
 
 class Engine:
@@ -200,129 +200,24 @@ class Engine:
         self._eye_current = QPointF(tx, ty)
         s.eye_current = (float(self._eye_current.x()), float(self._eye_current.y()))
 
-        # Go-home navigation
+        # Navigation (delegated to pure functions)
         if s.state == config.STATE_GO_HOME:
-            self._update_go_home(dt)
+            navigation.update_go_home(dt, s)
 
-        # Walk navigation (for STATE_WALK)
         if s.state == config.STATE_WALK:
-            self._update_walk(dt)
+            navigation.update_walk(dt, s)
 
-        # Wander navigation (for STATE_WANDER)
         if s.state == config.STATE_WANDER:
-            self._update_wander(dt)
-
-    # ── Walk navigation (standard walk) ─────────────────────────────
+            navigation.update_wander(dt, s)
 
     def _update_walk(self, dt: float) -> None:
-        s = self.state
-        if s.walk_pause:
-            if self._walk_pause_et.elapsed() / 1000.0 > random.uniform(1.0, 2.0):
-                s.walk_pause = False
-            return
-
-        s.walk_elapsed += dt
-        total = s.walk_duration
-        elapsed = s.walk_elapsed
-
-        if elapsed < config.WALK_ACCEL_TIME:
-            s.walk_accel = elapsed / config.WALK_ACCEL_TIME
-        elif elapsed > total - config.WALK_ACCEL_TIME:
-            rem = total - elapsed
-            s.walk_accel = max(0.0, rem / config.WALK_ACCEL_TIME)
-        else:
-            s.walk_accel = 1.0
-
-        speed = config.WALK_SPEED * s.walk_accel * dt
-        geo_screen = self.state.screen_width
-
-        if s.facing:
-            s.walk_accum += speed
-            whole = math.floor(s.walk_accum)
-            s.cat_x += whole
-            s.walk_accum -= whole
-            if s.cat_x + 80 >= geo_screen:  # don't go off right edge
-                s.cat_x = float(geo_screen - 80)
-                s.state = config.STATE_SIT
-                s.facing = False
-                return
-        else:
-            s.walk_accum += speed
-            whole = math.floor(s.walk_accum)
-            s.cat_x -= whole
-            s.walk_accum -= whole
-            if s.cat_x - 80 <= 0:  # don't go off left edge
-                s.cat_x = 80.0
-                s.state = config.STATE_SIT
-                s.facing = True
-                return
-
-        s.walk_frame = int((s.walk_elapsed * 6.5) % 4)
-
-    # ── Wander navigation (exploratory walks) ───────────────────────
+        navigation.update_walk(dt, self.state)
 
     def _update_wander(self, dt: float) -> None:
-        s = self.state
-
-        # Count this wander leg
-        s.wander_elapsed += dt
-
-        # Random direction reversal (so cat doesn't just go one way)
-        if random.random() < config.WANDER_TURN_CHANCE:
-            s.facing = not s.facing
-
-        # Check if wander timer expired
-        if s.wander_elapsed >= s.wander_duration:
-            s.state = config.STATE_SIT
-            s.wander_session_count += 1
-            s.wander_cooldown = config.WANDER_COOLDOWN
-            return
-
-        # Walk movement in facing direction
-        speed = config.WALK_SPEED * dt * 1.0
-        margin = config.WANDER_OFFSET
-
-        if s.facing:
-            s.cat_x += speed
-            if s.cat_x + margin >= s.screen_width:
-                s.cat_x = float(s.screen_width - margin)
-                s.facing = False  # bounce off right wall
-        else:
-            s.cat_x -= speed
-            if s.cat_x - margin <= 0:
-                s.cat_x = float(margin)
-                s.facing = True   # bounce off left wall
-
-        # Walk frame animation
-        s.walk_accum = (s.walk_accum + speed) % 1.0
-        s.walk_frame = int((s.wander_elapsed * 6.5) % 4)
-
-    # ── Go-home navigation ───────────────────────────────────────────
+        navigation.update_wander(dt, self.state)
 
     def _update_go_home(self, dt: float) -> None:
-        s = self.state
-        from cat.home import _bed_center
-        bed_x, bed_y = _bed_center(s)
-        remaining = bed_x - s.cat_x
-
-        if remaining <= config.HOME_TOLERANCE:
-            # Arrived at home
-            s.cat_x = bed_x
-            s.at_home = True
-            s.state = config.STATE_SLEEP
-            s.sleep_breath = 0.0
-            s.zzz_particles = []
-            s.walk_elapsed = 0.0
-            return
-
-        # Accelerate toward home, decelerate near arrival
-        speed = config.WALK_SPEED * dt * 1.2
-        if remaining < speed * 5:
-            speed = remaining / 5.0  # ease in
-
-        s.cat_x += speed
-        s.walk_elapsed += dt
-        s.walk_frame = int((s.walk_elapsed * 6.5) % 4)
+        navigation.update_go_home(dt, self.state)
 
     # ── Mouse tracking ──────────────────────────────────────────────
 
@@ -339,10 +234,10 @@ class Engine:
 
         s.mouse_near = dist < 150
 
-        # Mouse moving detection
+        # Mouse moving detection (stored for blink reactivity)
         dx_move = cursor.x() - self._prev_mouse_pos.x()
         dy_move = cursor.y() - self._prev_mouse_pos.y()
-        mouse_moving = abs(dx_move) > 2 or abs(dy_move) > 2
+        self._mouse_moving = abs(dx_move) > 2 or abs(dy_move) > 2
         self._prev_mouse_pos = QPointF(cursor)
 
         # Eye tracking
@@ -381,38 +276,10 @@ class Engine:
                 self._walk_et.start()
 
     def _process_actions(self) -> None:
-        s = self.state
-        while not action_queue.empty():
-            try:
-                action = action_queue.get_nowait()
-            except Exception:
-                break
-            s.last_interaction = time.monotonic()
-            s.boredom = 0.0
-            if action == "pet":
-                s.consecutive_pets += 1
-                if s.consecutive_pets >= 5:
-                    self._trigger_purr()
-                    s.consecutive_pets = 0
-                elif s.state == config.STATE_SLEEP:
-                    s.reaction_type = "meow"
-                    s.reaction_timer = 0.8
-                else:
-                    s.reaction_type = random.choice(["purr", "meow"])
-                    s.reaction_timer = 2.0 if s.reaction_type == "purr" else 0.8
-            elif action == "feed":
-                s.hunger = max(0.0, s.hunger - 15.0)
-            elif action == "wake":
-                if s.state == config.STATE_SLEEP:
-                    s.state = config.STATE_SIT
-                    s.energy = min(100.0, s.energy + 10.0)
-                    s.deep_sleep = False
+        navigation.process_actions(self.state)
 
     def _trigger_purr(self) -> None:
-        s = self.state
-        s.reaction_type = "purr"
-        s.reaction_timer = 1.5
-        s.purr_vibrate = 1.0
+        navigation.trigger_purr(self.state)
 
     def _clamp_needs(self) -> None:
         s = self.state
