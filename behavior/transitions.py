@@ -177,6 +177,7 @@ def _maybe_walk(dt: float, cat: dict, state) -> None:
         cat["walk_pause"] = False
         cat["walk_frame"] = 0
         cat["walk_accum"] = 0.0
+        cat["walk_vy"] = random.uniform(-0.3, 0.3)
 
 
 def _get_weather_behavior_mod(state) -> dict:

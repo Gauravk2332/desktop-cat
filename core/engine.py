@@ -37,7 +37,7 @@ def _per_cat_fields():
         "id", "x", "y", "state", "facing", "coat",
         "energy", "hunger", "boredom",
         "at_home", "home_cooldown", "home_linger",
-        "walk_duration", "walk_elapsed",
+        "walk_duration", "walk_elapsed", "walk_vy",
         "wander_duration", "wander_elapsed", "wander_cooldown",
         "wander_vx", "wander_vy", "hut_index",
     ]
@@ -698,6 +698,7 @@ class Engine:
                     cat0["walk_pause"] = False
                     cat0["walk_frame"] = 0
                     cat0["walk_accum"] = 0.0
+                    cat0["walk_vy"] = random.uniform(-0.3, 0.3)
                     self._walk_et.start()
 
         # ── Laser pointer chase (click-through OFF) for cat[0] ──

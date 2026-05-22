@@ -28,7 +28,7 @@ def _resolve(state_or_cat, state=None):
 # ── Walk ───────────────────────────────────────────────────────────
 
 def update_walk(dt: float, state_or_cat, state=None) -> None:
-    """Update walk navigation.
+    """Update walk navigation in 2D — horizontal + slight vertical drift.
 
     Two calling modes:
       update_walk(dt, state)           — legacy: cats[0]
@@ -57,7 +57,9 @@ def update_walk(dt: float, state_or_cat, state=None) -> None:
 
     speed = config.WALK_SPEED * cat["walk_accel"] * dt
     screen_w = _screen_w(state_or_cat, state)
+    screen_h = _screen_h(state_or_cat, state)
 
+    # ── Horizontal movement (existing) ──
     facing = cat.get("facing", True)
     if facing:
         cat["walk_accum"] = cat.get("walk_accum", 0.0) + speed
@@ -80,6 +82,26 @@ def update_walk(dt: float, state_or_cat, state=None) -> None:
             cat["facing"] = True
             return
 
+    # ── Vertical drift (new) — slight y-movement so cat isn't confined to a line ──
+    walk_vy = cat.get("walk_vy", 0.0)
+    if walk_vy == 0.0:
+        # Smoothly fade in y-drift over 10 ticks to avoid teleport
+        walk_vy = random.uniform(-0.25, 0.25)
+        cat["walk_vy"] = walk_vy
+
+    new_y = cat.get("y", 700.0) + walk_vy * speed * 1.5
+    y_min = screen_h * config.CAT_MIN_Y_FRACTION
+    y_max = screen_h - config.CAT_BASELINE
+
+    # Clamp and bounce
+    if new_y >= y_max:
+        new_y = float(y_max)
+        cat["walk_vy"] = -abs(walk_vy) if walk_vy > 0 else walk_vy  # bounce down→up
+    elif new_y <= y_min:
+        new_y = float(y_min)
+        cat["walk_vy"] = abs(walk_vy) if walk_vy < 0 else walk_vy  # bounce up→down
+
+    cat["y"] = new_y
     cat["walk_frame"] = int((cat["walk_elapsed"] * 6.5) % 4)
 
 
