@@ -3,7 +3,10 @@ core/navigation.py — Pure movement/navigation functions.
 
 Standalone logic extracted from Engine._update_walk/_update_wander/_update_go_home
 and Engine._process_actions/_trigger_purr.
-No Qt imports. Operates on CatState only.
+No Qt imports. Operates on CatState and per-cat dicts.
+
+All functions accept (dt, cat_dict, state) for per-cat mode.
+Legacy mode: pass (dt, state) — they self-dispatch to cats[0].
 """
 
 import math
@@ -13,294 +16,346 @@ import time
 import config
 
 
-def update_walk(dt: float, state) -> None:
-    """Update walk navigation. Extracted from Engine._update_walk."""
-    # Walk pause check — walk_pause is set to True by mouse tracking
-    if state.walk_pause:
-        elapsed = time.monotonic() - state.walk_pause_start
+# ── Dispatch helpers ─────────────────────────────────────────
+
+def _resolve(state_or_cat, state=None):
+    """Return (cat_dict, state) from either calling mode."""
+    if state is None:
+        return state_or_cat.cats[0], state_or_cat
+    return state_or_cat, state
+
+
+# ── Walk ───────────────────────────────────────────────────────────
+
+def update_walk(dt: float, state_or_cat, state=None) -> None:
+    """Update walk navigation.
+
+    Two calling modes:
+      update_walk(dt, state)           — legacy: cats[0]
+      update_walk(dt, cat_dict, state) — per-cat
+    """
+    cat, _ = _resolve(state_or_cat, state)
+
+    # Walk pause check
+    if cat.get("walk_pause"):
+        elapsed = time.monotonic() - cat.get("walk_pause_start", 0.0)
         if elapsed > random.uniform(1.0, 2.0):
-            state.walk_pause = False
+            cat["walk_pause"] = False
         return
 
-    state.walk_elapsed += dt
-    total = state.walk_duration
-    elapsed = state.walk_elapsed
+    cat["walk_elapsed"] = cat.get("walk_elapsed", 0.0) + dt
+    total = cat.get("walk_duration", 1.0)
+    elapsed = cat["walk_elapsed"]
 
     if elapsed < config.WALK_ACCEL_TIME:
-        state.walk_accel = elapsed / config.WALK_ACCEL_TIME
+        cat["walk_accel"] = elapsed / config.WALK_ACCEL_TIME
     elif elapsed > total - config.WALK_ACCEL_TIME:
         rem = total - elapsed
-        state.walk_accel = max(0.0, rem / config.WALK_ACCEL_TIME)
+        cat["walk_accel"] = max(0.0, rem / config.WALK_ACCEL_TIME)
     else:
-        state.walk_accel = 1.0
+        cat["walk_accel"] = 1.0
 
-    speed = config.WALK_SPEED * state.walk_accel * dt
-    screen_w = state.screen_width
+    speed = config.WALK_SPEED * cat["walk_accel"] * dt
+    screen_w = _screen_w(state_or_cat, state)
 
-    if state.facing:
-        state.walk_accum += speed
-        whole = math.floor(state.walk_accum)
-        state.cat_x += whole
-        state.walk_accum -= whole
-        if state.cat_x + 80 >= screen_w:
-            state.cat_x = float(screen_w - 80)
-            state.state = config.STATE_SIT
-            state.facing = False
+    facing = cat.get("facing", True)
+    if facing:
+        cat["walk_accum"] = cat.get("walk_accum", 0.0) + speed
+        whole = math.floor(cat["walk_accum"])
+        cat["x"] = cat.get("x", 500.0) + whole
+        cat["walk_accum"] -= whole
+        if cat["x"] + 80 >= screen_w:
+            cat["x"] = float(screen_w - 80)
+            cat["state"] = config.STATE_SIT
+            cat["facing"] = False
             return
     else:
-        state.walk_accum += speed
-        whole = math.floor(state.walk_accum)
-        state.cat_x -= whole
-        state.walk_accum -= whole
-        if state.cat_x - 80 <= 0:
-            state.cat_x = 80.0
-            state.state = config.STATE_SIT
-            state.facing = True
+        cat["walk_accum"] = cat.get("walk_accum", 0.0) + speed
+        whole = math.floor(cat["walk_accum"])
+        cat["x"] = cat.get("x", 500.0) - whole
+        cat["walk_accum"] -= whole
+        if cat["x"] - 80 <= 0:
+            cat["x"] = 80.0
+            cat["state"] = config.STATE_SIT
+            cat["facing"] = True
             return
 
-    state.walk_frame = int((state.walk_elapsed * 6.5) % 4)
+    cat["walk_frame"] = int((cat["walk_elapsed"] * 6.5) % 4)
 
 
-def update_wander(dt: float, state) -> None:
+def update_wander(dt: float, state_or_cat, state=None) -> None:
     """Wander in 2D — random direction, bounces off all edges."""
-    state.wander_elapsed += dt
+    cat, st = _resolve(state_or_cat, state)
+
+    cat["wander_elapsed"] = cat.get("wander_elapsed", 0.0) + dt
 
     # Random direction change
     if random.random() < config.WANDER_TURN_CHANCE:
         angle = random.uniform(0, math.pi * 2)
-        state.wander_vx = math.cos(angle)
-        state.wander_vy = math.sin(angle)
-        # Ensure cat doesn't go straight up or down (unnatural)
-        if abs(state.wander_vx) < 0.3:
-            state.wander_vx = 0.3 if state.facing else -0.3
+        cat["wander_vx"] = math.cos(angle)
+        cat["wander_vy"] = math.sin(angle)
+        if abs(cat["wander_vx"]) < 0.3:
+            cat["wander_vx"] = 0.3 if cat.get("facing", True) else -0.3
 
     # Check if wander timer expired
-    if state.wander_elapsed >= state.wander_duration:
-        state.state = config.STATE_SIT
-        state.wander_session_count += 1
-        state.wander_cooldown = config.WANDER_COOLDOWN
+    if cat["wander_elapsed"] >= cat.get("wander_duration", 2.0):
+        cat["state"] = config.STATE_SIT
+        cat["wander_session_count"] = cat.get("wander_session_count", 0) + 1
+        cat["wander_cooldown"] = config.WANDER_COOLDOWN
         return
 
-    # Move
     speed = config.WALK_SPEED * dt * 1.0
     margin = config.WANDER_OFFSET
+    screen_w = cat.get("x", 500.0)
+    screen_h = cat.get("y", 700.0)
 
-    # Normalize direction vector
-    mag = math.hypot(state.wander_vx, state.wander_vy)
+    vx = cat.get("wander_vx", 1.0)
+    vy = cat.get("wander_vy", 0.0)
+    mag = math.hypot(vx, vy)
     if mag > 0:
-        vx = state.wander_vx / mag
-        vy = state.wander_vy / mag
+        vx /= mag
+        vy /= mag
     else:
         vx, vy = 1.0, 0.0
 
-    new_x = state.cat_x + vx * speed
-    new_y = state.cat_y + vy * speed
+    new_x = cat.get("x", 500.0) + vx * speed
+    new_y = cat.get("y", 700.0) + vy * speed
 
-    # Y-range limits (don't go too high or off bottom)
-    y_min = state.screen_height * config.CAT_MIN_Y_FRACTION
-    y_max = state.screen_height - config.CAT_BASELINE
+    scr_w = _screen_w(state_or_cat, state)
+    scr_h = _screen_h(state_or_cat, state)
+    y_min = scr_h * config.CAT_MIN_Y_FRACTION
+    y_max = scr_h - config.CAT_BASELINE
 
-    # Bounce off ALL edges
-    if new_x + margin >= state.screen_width:
-        new_x = float(state.screen_width - margin)
-        state.wander_vx = -state.wander_vx
+    if new_x + margin >= scr_w:
+        new_x = float(scr_w - margin)
+        cat["wander_vx"] = -cat.get("wander_vx", 1.0)
     elif new_x - margin <= 0:
         new_x = float(margin)
-        state.wander_vx = -state.wander_vx
+        cat["wander_vx"] = -cat.get("wander_vx", 1.0)
 
     if new_y + margin >= y_max:
         new_y = float(y_max)
-        state.wander_vy = -state.wander_vy
+        cat["wander_vy"] = -cat.get("wander_vy", 0.0)
     elif new_y - margin <= y_min:
         new_y = float(y_min)
-        state.wander_vy = -state.wander_vy
+        cat["wander_vy"] = -cat.get("wander_vy", 0.0)
 
-    state.cat_x = new_x
-    state.cat_y = new_y
+    cat["x"] = new_x
+    cat["y"] = new_y
+    cat["facing"] = vx > 0
 
-    # Facing direction mirrors horizontal velocity
-    state.facing = vx > 0
-
-    # Walk frame
-    state.walk_accum = (state.walk_accum + speed) % 1.0
-    state.walk_frame = int((state.wander_elapsed * 6.5) % 4)
+    walk_accum = cat.get("walk_accum", 0.0)
+    walk_accum = (walk_accum + speed) % 1.0
+    cat["walk_accum"] = walk_accum
+    cat["walk_frame"] = int((cat.get("wander_elapsed", 0.0) * 6.5) % 4)
 
 
-def update_go_home(dt: float, state) -> None:
+# ── Go Home ─────────────────────────────────────────────────────
+
+def update_go_home(dt: float, state_or_cat, state=None) -> None:
     """Navigate toward hut door in 2D."""
-    from cat.home import _hut_door_center
-    hx, hy = _hut_door_center(state)
+    cat, _ = _resolve(state_or_cat, state)
+    hut_idx = cat.get("hut_index", 0)
 
-    dx = hx - state.cat_x
-    dy = hy - state.cat_y
+    from cat.home import _hut_door_center
+    hx, hy = _hut_door_center(state_or_cat if state is None else state, hut_idx)
+
+    dx = hx - cat.get("x", 500.0)
+    dy = hy - cat.get("y", 700.0)
     dist = math.hypot(dx, dy)
 
     if dist <= config.HOME_TOLERANCE:
-        state.cat_x = float(hx)
-        state.cat_y = float(hy - 2)  # slightly above door floor (cat sits on floor)
-        state.at_home = True
-        state.state = config.STATE_SLEEP
-        state.sleep_breath = 0.0
-        state.zzz_particles = []
-        state.walk_elapsed = 0.0
+        cat["x"] = float(hx)
+        cat["y"] = float(hy - 2)
+        cat["at_home"] = True
+        cat["state"] = config.STATE_SLEEP
+        cat["sleep_breath"] = 0.0
+        cat["zzz_particles"] = []
+        cat["walk_elapsed"] = 0.0
         return
 
     speed = config.WALK_SPEED * dt * 1.2
     if dist < speed * 5:
-        speed = dist / 5.0  # ease in
+        speed = dist / 5.0
 
-    # Move toward target
     if dist > 0:
-        state.cat_x += (dx / dist) * speed
-        state.cat_y += (dy / dist) * speed
+        cat["x"] = cat.get("x", 500.0) + (dx / dist) * speed
+        cat["y"] = cat.get("y", 700.0) + (dy / dist) * speed
 
-    state.facing = dx > 0  # face toward home
-    state.walk_elapsed += dt
-    state.walk_frame = int((state.walk_elapsed * 6.5) % 4)
+    cat["facing"] = dx > 0
+    cat["walk_elapsed"] = cat.get("walk_elapsed", 0.0) + dt
+    cat["walk_frame"] = int((cat.get("walk_elapsed", 0.0) * 6.5) % 4)
 
 
-def trigger_purr(state) -> None:
-    """Trigger purr reaction on state."""
-    state.reaction_type = "purr"
-    state.reaction_timer = 1.5
-    state.purr_vibrate = 1.0
+# ── Chase ────────────────────────────────────────────────────────
+
+def update_chase(dt: float, state_or_cat, state=None) -> None:
+    """Chase toward laser pointer / cursor position."""
+    cat, _ = _resolve(state_or_cat, state)
+
+    toy_target = cat.get("toy_target")
+    if toy_target is None:
+        cat["state"] = config.STATE_SIT
+        cat["toy_active"] = False
+        cat["toy_type"] = None
+        return
+
+    tx, ty = toy_target
+    dx = tx - cat.get("x", 500.0)
+    dy = ty - cat.get("y", 700.0)
+    dist = math.hypot(dx, dy)
+
+    cat["facing"] = dx > 0
+
+    if dist <= config.CHASE_REACH_DISTANCE:
+        cat["state"] = config.STATE_SIT
+        cat["toy_active"] = False
+        cat["toy_type"] = None
+        return
+
+    speed = config.WALK_SPEED * config.CHASE_SPEED_MULTIPLIER * dt
+    if dist > 0:
+        cat["x"] = cat.get("x", 500.0) + (dx / dist) * speed
+        cat["y"] = cat.get("y", 700.0) + (dy / dist) * speed
+
+    scr_w = _screen_w(state_or_cat, state)
+    scr_h = _screen_h(state_or_cat, state)
+    margin = config.WANDER_OFFSET
+    y_min = scr_h * config.CAT_MIN_Y_FRACTION
+    y_max = scr_h - config.CAT_BASELINE
+    cat["x"] = max(float(margin), min(cat["x"], float(scr_w - margin)))
+    cat["y"] = max(float(y_min), min(cat["y"], float(y_max)))
+
+    cat["walk_elapsed"] = cat.get("walk_elapsed", 0.0) + dt
+    cat["walk_frame"] = int((cat.get("walk_elapsed", 0.0) * 9.0) % 4)
+
+
+# ── Play ──────────────────────────────────────────────────────────
+
+def update_play(dt: float, state_or_cat, state=None) -> None:
+    """Play with yarn ball / butterfly toy."""
+    cat, _ = _resolve(state_or_cat, state)
+
+    if not cat.get("toy_active") or cat.get("toy_target") is None:
+        cat["state"] = config.STATE_SIT
+        cat["toy_active"] = False
+        cat["toy_type"] = None
+        return
+
+    cat["toy_timer"] = cat.get("toy_timer", 0.0) - dt
+    if cat["toy_timer"] <= 0:
+        cat["state"] = config.STATE_SIT
+        cat["toy_active"] = False
+        cat["toy_type"] = None
+        return
+
+    tx, ty = cat["toy_target"]
+    dx = tx - cat.get("x", 500.0)
+    dy = ty - cat.get("y", 700.0)
+    dist = math.hypot(dx, dy)
+
+    cat["facing"] = dx > 0
+
+    if dist <= config.PLAY_TOY_REACH_DISTANCE:
+        _spawn_hearts_for_cat(cat, count=5)
+        cat["state"] = config.STATE_SIT
+        cat["toy_active"] = False
+        cat["toy_type"] = None
+        return
+
+    speed = config.WALK_SPEED * dt
+    if dist > 0:
+        cat["x"] = cat.get("x", 500.0) + (dx / dist) * speed
+        cat["y"] = cat.get("y", 700.0) + (dy / dist) * speed
+
+    scr_w = _screen_w(state_or_cat, state)
+    scr_h = _screen_h(state_or_cat, state)
+    margin = config.WANDER_OFFSET
+    y_min = scr_h * config.CAT_MIN_Y_FRACTION
+    y_max = scr_h - config.CAT_BASELINE
+    cat["x"] = max(float(margin), min(cat["x"], float(scr_w - margin)))
+    cat["y"] = max(float(y_min), min(cat["y"], float(y_max)))
+
+    cat["walk_elapsed"] = cat.get("walk_elapsed", 0.0) + dt
+    cat["walk_frame"] = int((cat.get("walk_elapsed", 0.0) * 6.5) % 4)
+
+
+# ── Purr / Reactions ────────────────────────────────────────────
+
+def trigger_purr(state_or_cat, state=None) -> None:
+    """Trigger purr reaction."""
+    cat, _ = _resolve(state_or_cat, state)
+    cat["reaction_type"] = "purr"
+    cat["reaction_timer"] = 1.5
+    cat["purr_vibrate"] = 1.0
 
 
 def process_actions(state) -> None:
-    """Process external action queue. Extracted from Engine._process_actions."""
+    """Process external action queue from API.
+    Operates on all cats (pet/feed/wake affects cats[0] for backward compat).
+    """
     from core.api import action_queue
-    s = state
     while not action_queue.empty():
         try:
             action = action_queue.get_nowait()
         except Exception:
             break
-        s.last_interaction = time.monotonic()
-        s.boredom = 0.0
+
+        # Operate on cats[0] for backward compat
+        if not state.cats:
+            continue
+        cat = state.cats[0]
+        cat["last_interaction"] = time.monotonic()
+        cat["boredom"] = 0.0
         if action == "pet":
-            s.consecutive_pets += 1
-            # Spawn floating hearts
-            _spawn_hearts(s)
-            if s.consecutive_pets >= 5:
-                trigger_purr(s)
-                s.consecutive_pets = 0
-            elif s.state == config.STATE_SLEEP:
-                s.reaction_type = "meow"
-                s.reaction_timer = 0.8
+            cat["consecutive_pets"] = cat.get("consecutive_pets", 0) + 1
+            _spawn_hearts_for_cat(cat)
+            if cat["consecutive_pets"] >= 5:
+                trigger_purr(state)
+                cat["consecutive_pets"] = 0
+            elif cat["state"] == config.STATE_SLEEP:
+                cat["reaction_type"] = "meow"
+                cat["reaction_timer"] = 0.8
             else:
-                s.reaction_type = random.choice(["purr", "meow"])
-                s.reaction_timer = 2.0 if s.reaction_type == "purr" else 0.8
+                cat["reaction_type"] = random.choice(["purr", "meow"])
+                cat["reaction_timer"] = 2.0 if cat["reaction_type"] == "purr" else 0.8
         elif action == "feed":
-            s.hunger = max(0.0, s.hunger - 15.0)
+            cat["hunger"] = max(0.0, cat["hunger"] - 15.0)
         elif action == "wake":
-            if s.state == config.STATE_SLEEP:
-                s.state = config.STATE_SIT
-                s.energy = min(100.0, s.energy + 10.0)
-                s.deep_sleep = False
-
-
-def update_chase(dt: float, state) -> None:
-    """Chase toward laser pointer / cursor position.
-    Moves at CHASE_SPEED_MULTIPLIER * WALK_SPEED.
-    When close enough, sit and look around.
-    If mouse hasn't moved for CHASE_TIMEOUT, go back to SIT.
-    """
-    if state.toy_target is None:
-        state.state = config.STATE_SIT
-        state.toy_active = False
-        state.toy_type = None
-        return
-
-    tx, ty = state.toy_target
-    dx = tx - state.cat_x
-    dy = ty - state.cat_y
-    dist = math.hypot(dx, dy)
-
-    # Face toward target
-    state.facing = dx > 0
-
-    if dist <= config.CHASE_REACH_DISTANCE:
-        # Reached the target — sit and look around
-        state.state = config.STATE_SIT
-        state.toy_active = False
-        state.toy_type = None
-        return
-
-    # Move toward target at excited speed
-    speed = config.WALK_SPEED * config.CHASE_SPEED_MULTIPLIER * dt
-    if dist > 0:
-        state.cat_x += (dx / dist) * speed
-        state.cat_y += (dy / dist) * speed
-
-    # Clamp to screen bounds
-    margin = config.WANDER_OFFSET
-    y_min = state.screen_height * config.CAT_MIN_Y_FRACTION
-    y_max = state.screen_height - config.CAT_BASELINE
-    state.cat_x = max(float(margin), min(state.cat_x, float(state.screen_width - margin)))
-    state.cat_y = max(float(y_min), min(state.cat_y, float(y_max)))
-
-    state.walk_elapsed += dt
-    state.walk_frame = int((state.walk_elapsed * 9.0) % 4)  # faster walk cycle
-
-
-def update_play(dt: float, state) -> None:
-    """Play with yarn ball / butterfly toy.
-    If toy is active, cat walks toward it.
-    When reaching the toy, trigger heart burst and disappear.
-    """
-    if not state.toy_active or state.toy_target is None:
-        state.state = config.STATE_SIT
-        state.toy_active = False
-        state.toy_type = None
-        return
-
-    # Tick toy timer
-    state.toy_timer -= dt
-    if state.toy_timer <= 0:
-        state.state = config.STATE_SIT
-        state.toy_active = False
-        state.toy_type = None
-        return
-
-    tx, ty = state.toy_target
-    dx = tx - state.cat_x
-    dy = ty - state.cat_y
-    dist = math.hypot(dx, dy)
-
-    # Face toward toy
-    state.facing = dx > 0
-
-    if dist <= config.PLAY_TOY_REACH_DISTANCE:
-        # Caught the toy! Hearts + disappear
-        _spawn_hearts(state, count=5)
-        state.state = config.STATE_SIT
-        state.toy_active = False
-        state.toy_type = None
-        return
-
-    # Walk toward toy
-    speed = config.WALK_SPEED * dt
-    if dist > 0:
-        state.cat_x += (dx / dist) * speed
-        state.cat_y += (dy / dist) * speed
-
-    # Clamp
-    margin = config.WANDER_OFFSET
-    y_min = state.screen_height * config.CAT_MIN_Y_FRACTION
-    y_max = state.screen_height - config.CAT_BASELINE
-    state.cat_x = max(float(margin), min(state.cat_x, float(state.screen_width - margin)))
-    state.cat_y = max(float(y_min), min(state.cat_y, float(y_max)))
-
-    state.walk_elapsed += dt
-    state.walk_frame = int((state.walk_elapsed * 6.5) % 4)
+            if cat["state"] == config.STATE_SLEEP:
+                cat["state"] = config.STATE_SIT
+                cat["energy"] = min(100.0, cat["energy"] + 10.0)
+                cat["deep_sleep"] = False
 
 
 def _spawn_hearts(state, count: int = 3) -> None:
-    """Spawn floating hearts above the cat."""
+    """Spawn floating hearts above the cat (legacy: uses cats[0])."""
+    if state.cats:
+        _spawn_hearts_for_cat(state.cats[0], count)
+
+
+def _spawn_hearts_for_cat(cat: dict, count: int = 3) -> None:
+    """Spawn floating hearts above a single cat dict."""
+    hearts = cat.get("hearts", [])
     for _ in range(count):
-        state.hearts.append([
-            random.uniform(-12, 12),  # x_offset from cat center
-            random.uniform(-30, -20),  # y_offset (above cat)
-            1.5,                       # lifetime (seconds)
-            random.uniform(6, 10),     # size (radius)
+        hearts.append([
+            random.uniform(-12, 12),
+            random.uniform(-30, -20),
+            1.5,
+            random.uniform(6, 10),
         ])
+    cat["hearts"] = hearts
+
+
+def _screen_w(state_or_cat, state=None):
+    """Get screen width from whichever arg has it."""
+    if state is not None:
+        return state.screen_width
+    return getattr(state_or_cat, 'screen_width', 1920)
+
+
+def _screen_h(state_or_cat, state=None):
+    """Get screen height from whichever arg has it."""
+    if state is not None:
+        return state.screen_height
+    return getattr(state_or_cat, 'screen_height', 1080)

@@ -225,7 +225,7 @@ class TestWeatherNeedsIntegration(unittest.TestCase):
         # Patch to a neutral hour (14) where no energy TOD multiplier applies
         with patch("behavior.needs.datetime") as mock_dt:
             mock_dt.now.return_value.hour = 14
-            needs.update(self.dt, self.state)
+            needs.update(self.dt, self.state.cats[0], self.state)
         # Energy should have drained less than normal SIT rate
         base_drain = config.ENERGY_DRAIN_SIT * self.dt
         drain = 100.0 - self.state.energy
@@ -239,7 +239,7 @@ class TestWeatherNeedsIntegration(unittest.TestCase):
         needs = self._import_needs()
         self.state.state = config.STATE_SIT
         self.state.hunger = 20.0
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         base_hunger = config.HUNGER_DRAIN * self.dt
         sunny_hunger = config.HUNGER_DRAIN * self.dt * 1.1
         increase = self.state.hunger - 20.0
@@ -251,7 +251,7 @@ class TestWeatherNeedsIntegration(unittest.TestCase):
         needs = self._import_needs()
         self.state.state = config.STATE_SIT
         self.state.boredom = 0.0
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         base_boredom = config.BOREDOM_INCREASE_SIT * self.dt
         stormy_boredom = base_boredom * 0.2
         # Boredom will have time-of-day multiplier too, but should still be small
@@ -328,7 +328,7 @@ class TestAfkBoredomAcceleration(unittest.TestCase):
         """AFK (no interaction for 300s+) should double boredom increase."""
         needs = self._import_needs()
         # last_interaction = 0, now is time.monotonic() which is large
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         base_boredom = config.BOREDOM_INCREASE_SIT * self.dt
         # With AFK double + tod + weather modifiers, should be more than base
         self.assertGreaterEqual(self.state.boredom, base_boredom)
@@ -337,7 +337,7 @@ class TestAfkBoredomAcceleration(unittest.TestCase):
         """Recent interaction should not accelerate boredom."""
         self.state.last_interaction = time.monotonic()  # just interacted
         needs = self._import_needs()
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         base_boredom = config.BOREDOM_INCREASE_SIT * self.dt
         # With AFK not active, boredom should be base * tod * weather
         self.assertLess(self.state.boredom, base_boredom * 2.0)
@@ -362,7 +362,7 @@ class TestCriticalThresholds(unittest.TestCase):
         needs = self._import_needs()
         self.state.state = config.STATE_SIT
         self.state.energy = 15.0
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_SLEEP)
 
     def test_energy_critical_does_not_interrupt_sleep(self):
@@ -370,7 +370,7 @@ class TestCriticalThresholds(unittest.TestCase):
         needs = self._import_needs()
         self.state.state = config.STATE_SLEEP
         self.state.energy = 15.0
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_SLEEP)
 
     def test_boredom_erratic_triggers_walk(self):
@@ -381,7 +381,7 @@ class TestCriticalThresholds(unittest.TestCase):
         # Run many ticks to ensure it fires (10% per tick)
         erratic_triggered = False
         for _ in range(200):
-            needs.update(self.dt, self.state)
+            needs.update(self.dt, self.state.cats[0], self.state)
             if self.state.state != config.STATE_SIT:
                 erratic_triggered = True
                 break
@@ -393,7 +393,7 @@ class TestCriticalThresholds(unittest.TestCase):
         self.state.state = config.STATE_SIT
         self.state.boredom = 75.0
         for _ in range(200):
-            needs.update(self.dt, self.state)
+            needs.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_SIT,
                          "Should stay sitting when boredom < 80")
 
@@ -434,7 +434,7 @@ class TestFeedCycle(unittest.TestCase):
         """Feed should trigger happy speech via engine."""
         self.state.speech_cooldown = 0.0
         self.controls._feed_cycle()
-        self.mock_engine._trigger_speech.assert_called_once_with("happy")
+        self.mock_engine._trigger_speech.assert_called_once_with("happy", cat_idx=0)
 
     def test_feed_spawns_hearts(self):
         """Feed should spawn 3 hearts."""
