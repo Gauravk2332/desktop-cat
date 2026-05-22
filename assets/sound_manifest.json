@@ -1,0 +1,58 @@
+{
+  "meta": {
+    "description": "Sound asset specifications for desktop-cat. Actual WAV/MP3 files to be generated programmatically.",
+    "sample_rate_hz": 44100,
+    "bit_depth": 16,
+    "generated_by": "Coder via PyQt6 QAudioGenerator or scipy/numpy"
+  },
+  "sounds": [
+    {
+      "name": "purr",
+      "type": "generated",
+      "format": "wav",
+      "spec": "55Hz sine wave, triangle envelope (soft attack/decay), 200ms fade-in, continuous loop",
+      "duration_sec": 1.0,
+      "notes": "Low rumbling — layer 55Hz + 110Hz sub-harmonic at -6dB for warmth"
+    },
+    {
+      "name": "meow_short",
+      "type": "generated",
+      "format": "wav",
+      "spec": "Rising pitch from 350Hz to 800Hz over 0.3s, then quick 100ms decay. Glottal stop at start. 'mrr?' quality",
+      "duration_sec": 0.4,
+      "notes": "Questioning meow — frequency sweep up with slight vibrato (10Hz, 2%)"
+    },
+    {
+      "name": "meow_long",
+      "type": "generated",
+      "format": "wav",
+      "spec": "Descending tone 800Hz → 300Hz over 0.6s, 5Hz vibrato (slight waver), 200ms natural decay tail",
+      "duration_sec": 0.8,
+      "notes": "Classic meow — add formant shift for fullness: F1~800Hz, F2~1800Hz"
+    },
+    {
+      "name": "footstep",
+      "type": "generated",
+      "format": "wav",
+      "spec": "80Hz thud, 50ms exponential decay, bandpass filtered (100-200Hz). Very short — single pad tap",
+      "duration_sec": 0.05,
+      "notes": "Tiny impact sound — layer white noise burst (2ms) for texture"
+    },
+    {
+      "name": "sleep_breathing",
+      "type": "generated",
+      "format": "wav",
+      "spec": "Gentle white noise swell, triangle amplitude envelope (slow attack 400ms, slow decay 400ms, 200ms pause). Soft sibilance at 3-6kHz",
+      "duration_sec": 1.5,
+      "notes": "Rhythmic breathing — bandpass white noise 300Hz-4kHz, gentle fade loop"
+    },
+    {
+      "name": "eat_crunch",
+      "type": "generated",
+      "format": "wav",
+      "spec": "Short burst of high-frequency noise (4-8kHz), 20ms attack, 60ms decay. Random tiny clicks layered",
+      "duration_sec": 0.08,
+      "notes": "Tiny kibble crunch — white noise burst with 3 random amplitude peaks"
+    }
+  ]
+}
