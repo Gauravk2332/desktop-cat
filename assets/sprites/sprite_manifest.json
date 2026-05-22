@@ -7,47 +7,56 @@
     "sit_alert": {
       "path": "sit_alert.png",
       "frames": 10,
-      "type": "loop"
+      "type": "loop",
+      "fps": 3
     },
     "walk": {
       "path": "walk.png",
       "frames": 10,
-      "type": "loop"
+      "type": "loop",
+      "fps": 10
     },
     "trot": {
       "path": "trot.png",
       "frames": 8,
-      "type": "loop"
+      "type": "loop",
+      "fps": 12
     },
     "jump": {
       "path": "jump.png",
       "frames": 8,
-      "type": "loop"
+      "type": "loop",
+      "fps": 8
     },
     "fall": {
       "path": "fall.png",
       "frames": 8,
-      "type": "loop"
+      "type": "loop",
+      "fps": 8
     },
     "slide": {
       "path": "slide.png",
       "frames": 10,
-      "type": "loop"
+      "type": "loop",
+      "fps": 6
     },
     "hurt": {
       "path": "hurt.png",
       "frames": 10,
-      "type": "loop"
+      "type": "loop",
+      "fps": 4
     },
     "dead": {
       "path": "dead.png",
       "frames": 10,
-      "type": "once"
+      "type": "once",
+      "fps": 3
     },
     "sleep_curled": {
       "path": "sleep_curled.png",
       "frames": 10,
-      "type": "loop"
+      "type": "loop",
+      "fps": 2
     }
   }
 }

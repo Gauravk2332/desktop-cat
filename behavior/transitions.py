@@ -22,6 +22,33 @@ from datetime import datetime
 import config
 
 
+# Dwell hesitation duration for state transitions (seconds)
+DWELL_MIN = 0.3
+DWELL_MAX = 0.5
+
+
+def _schedule_transition(cat: dict, new_state: str) -> None:
+    """Schedule a state transition with 300-500ms dwell hesitation.
+
+    Sets a pending state and dwell timer. The transition applies
+    when the timer expires in a subsequent update() call.
+    """
+    if cat["state"] == new_state:
+        return
+    cat["pending_state"] = new_state
+    cat["dwell_timer"] = random.uniform(DWELL_MIN, DWELL_MAX)
+
+
+def _apply_pending(cat: dict) -> bool:
+    """Apply pending state if dwell timer expired. Returns True if applied."""
+    if cat.get("dwell_timer", 0) > 0:
+        return False
+    if "pending_state" in cat:
+        cat["state"] = cat.pop("pending_state")
+        return True
+    return False
+
+
 def update(dt: float, state_or_cat, state=None) -> None:
     """Check transition conditions and change state when met.
 
@@ -41,6 +68,12 @@ def update(dt: float, state_or_cat, state=None) -> None:
     cat["home_linger"] = max(0.0, cat["home_linger"] - dt)
     cat["wander_cooldown"] = max(0.0, cat["wander_cooldown"] - dt)
 
+    # Dwell hesitation: count down pending transition timer
+    if cat.get("dwell_timer", 0) > 0:
+        cat["dwell_timer"] -= dt
+        _apply_pending(cat)
+        return  # Don't check new conditions while hesitating
+
     s = cat["state"]
     if s == config.STATE_SLEEP:
         _update_sleep(dt, cat, st)
@@ -58,12 +91,12 @@ def _update_sleep(dt: float, cat: dict, state) -> None:
     """Wake up when recharged. Home sleep wakes earlier than field sleep."""
     threshold = config.HOME_NAP_MIN_ENERGY if cat["at_home"] else 85.0
     if cat["energy"] > threshold:
-        cat["state"] = config.STATE_SIT
+        _schedule_transition(cat, config.STATE_SIT)
         cat["deep_sleep"] = False
         cat["zzz_particles"] = []
         cat["sleep_breath"] = 0.0
 
-        # After home sleep: linger + prevent immediate GO_HOME
+        # Apply the cleanup immediately even if dwell delays the state change
         if cat["at_home"]:
             cat["home_linger"] = config.HOME_LINGER_DURATION
             cat["home_cooldown"] = config.HOME_VISIT_COOLDOWN
@@ -114,7 +147,7 @@ def _update_sit(dt: float, cat: dict, state) -> None:
 def _update_walk(dt: float, cat: dict) -> None:
     """Sit down when walk decelerates to a stop."""
     if cat["walk_elapsed"] > cat["walk_duration"] + 0.5:
-        cat["state"] = config.STATE_SIT
+        _schedule_transition(cat, config.STATE_SIT)
         cat["walk_elapsed"] = 0.0
 
 
@@ -132,7 +165,7 @@ def _update_go_home(dt: float, cat: dict, state) -> None:
 
 def _enter_go_home(cat: dict) -> None:
     """Start walking toward the home hut."""
-    cat["state"] = config.STATE_GO_HOME
+    _schedule_transition(cat, config.STATE_GO_HOME)
     cat["walk_elapsed"] = 0.0
     cat["walk_frame"] = 0
     cat["walk_accel"] = 1.0
@@ -140,7 +173,7 @@ def _enter_go_home(cat: dict) -> None:
 
 def _enter_sleep(cat: dict) -> None:
     """Transition to sleep (field sleep)."""
-    cat["state"] = config.STATE_SLEEP
+    _schedule_transition(cat, config.STATE_SLEEP)
     cat["sleep_breath"] = 0.0
     cat["zzz_particles"] = []
     cat["at_home"] = False
@@ -152,7 +185,7 @@ def _enter_wander(cat: dict) -> None:
     cat["wander_vx"] = math.cos(angle)
     cat["wander_vy"] = math.sin(angle)
     cat["facing"] = cat["wander_vx"] > 0
-    cat["state"] = config.STATE_WANDER
+    _schedule_transition(cat, config.STATE_WANDER)
     cat["wander_duration"] = random.uniform(config.WANDER_DURATION_MIN, config.WANDER_DURATION_MAX)
     cat["wander_elapsed"] = 0.0
     cat["walk_frame"] = 0
@@ -170,7 +203,7 @@ def _maybe_walk(dt: float, cat: dict, state) -> None:
         else:
             cat["facing"] = random.choice([True, False])
 
-        cat["state"] = config.STATE_WALK
+        _schedule_transition(cat, config.STATE_WALK)
         cat["walk_duration"] = max(0.8, random.uniform(1.5, 3.0))
         cat["walk_elapsed"] = 0.0
         cat["walk_accel"] = 0.0

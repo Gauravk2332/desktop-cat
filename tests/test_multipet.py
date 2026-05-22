@@ -222,6 +222,9 @@ class TestIndependentStateMachines(unittest.TestCase):
         self.state.cats[1]["energy"] = 80.0  # fine
 
         transitions.update(0.05, self.state.cats[0], self.state)
+        # Advance past dwell hesitation for cat 0
+        for _ in range(20):
+            transitions.update(0.05, self.state.cats[0], self.state)
 
         self.assertEqual(self.state.cats[0]["state"], "GO_HOME",
                          "Low-energy cat should go home")

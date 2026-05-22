@@ -81,7 +81,7 @@ class TestStateTransitions(unittest.TestCase):
         trans = self._import_transitions()
         self.state.energy = 35.0  # below HOME_ENERGY_THRESHOLD (40)
         trans.update(self.dt, self.state.cats[0], self.state)
-        # GO_HOME fires before SLEEP due to priority order
+        self._run_ticks(trans, 20)  # advance past dwell hesitation (300-500ms)
         self.assertEqual(self.state.state, config.STATE_GO_HOME)
 
     def test_sit_to_sleep_high_boredom(self):
@@ -90,7 +90,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.energy = 90.0
         self.state.boredom = config.HOME_BOREDOM_THRESHOLD + 1.0  # > 70
         trans.update(self.dt, self.state.cats[0], self.state)
-        # GO_HOME fires before SLEEP due to priority order
+        self._run_ticks(trans, 20)  # advance past dwell hesitation (300-500ms)
         self.assertEqual(self.state.state, config.STATE_GO_HOME)
 
     def test_sleep_to_sit_at_home(self):
@@ -100,6 +100,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.at_home = True
         self.state.energy = config.HOME_NAP_MIN_ENERGY + 1.0
         trans.update(self.dt, self.state.cats[0], self.state)
+        self._run_ticks(trans, 20)  # advance past dwell hesitation (300-500ms)
         self.assertEqual(self.state.state, config.STATE_SIT)
 
     def test_sleep_to_sit_field(self):
@@ -109,6 +110,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.at_home = False
         self.state.energy = 86.0
         trans.update(self.dt, self.state.cats[0], self.state)
+        self._run_ticks(trans, 20)  # advance past dwell hesitation (300-500ms)
         self.assertEqual(self.state.state, config.STATE_SIT)
 
     def test_go_home_triggers_low_energy(self):
@@ -116,6 +118,7 @@ class TestStateTransitions(unittest.TestCase):
         trans = self._import_transitions()
         self.state.energy = config.HOME_ENERGY_THRESHOLD - 1.0
         trans.update(self.dt, self.state.cats[0], self.state)
+        self._run_ticks(trans, 20)  # advance past dwell hesitation (300-500ms)
         self.assertEqual(self.state.state, config.STATE_GO_HOME)
 
     def test_sleep_linger_resets_at_home(self):
@@ -125,6 +128,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.at_home = True
         self.state.energy = 95.0
         trans.update(self.dt, self.state.cats[0], self.state)
+        self._run_ticks(trans, 20)  # advance past dwell hesitation (300-500ms)
         self.assertEqual(self.state.state, config.STATE_SIT)
         self.assertTrue(self.state.at_home)  # lingering
         self.assertGreater(self.state.home_linger, 0)
@@ -146,6 +150,8 @@ class TestStateTransitions(unittest.TestCase):
         with patch("behavior.transitions._wander_chance_per_tick") as mock_chance:
             mock_chance.return_value = 1.0  # 100% chance
             trans.update(self.dt, self.state.cats[0], self.state)
+            # Advance past dwell hesitation (300-500ms) while mock is still active
+            self._run_ticks(trans, 20)
 
         # Should be in WANDER if not at home
         if not self.state.at_home:
@@ -158,6 +164,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.walk_duration = 2.0
         self.state.walk_elapsed = 3.0  # over 2.0 + 0.5
         trans.update(self.dt, self.state.cats[0], self.state)
+        self._run_ticks(trans, 20)  # advance past dwell hesitation (300-500ms)
         self.assertEqual(self.state.state, config.STATE_SIT)
 
     def test_walk_sits_under_duration(self):
@@ -167,6 +174,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.walk_duration = 3.0
         self.state.walk_elapsed = 2.0  # still under
         trans.update(self.dt, self.state.cats[0], self.state)
+        self._run_ticks(trans, 20)  # advance past dwell hesitation
         self.assertEqual(self.state.state, config.STATE_WALK)
 
     def test_boredom_home_visit(self):
@@ -177,6 +185,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.home_cooldown = 0.0
         self.state.at_home = False
         trans.update(self.dt, self.state.cats[0], self.state)
+        self._run_ticks(trans, 20)  # advance past dwell hesitation (300-500ms)
         self.assertEqual(self.state.state, config.STATE_GO_HOME)
 
     def test_field_sleep_not_at_home(self):
@@ -196,6 +205,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.energy = config.HOME_ENERGY_THRESHOLD - 1.0  # below threshold
         self.state.boredom = 0.0  # not bored
         trans.update(self.dt, self.state.cats[0], self.state)
+        self._run_ticks(trans, 20)  # advance past dwell hesitation
         self.assertEqual(self.state.state, config.STATE_GO_HOME,
                          "Energy should trigger GO_HOME even without boredom")
 
