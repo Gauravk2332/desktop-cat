@@ -34,9 +34,20 @@ class CatTrayIcon:
         self.act_show.setChecked(True)
         self.menu.addAction(self.act_show)
         self.menu.addSeparator()
+
+        self.act_settings = QAction("Settings...", self.menu)
+        self.act_settings.triggered.connect(self._open_settings)
+        self.menu.addAction(self.act_settings)
+        self.menu.addSeparator()
+
         self.act_quit = QAction("Quit", self.menu)
         self.act_quit.triggered.connect(self.app.quit)
         self.menu.addAction(self.act_quit)
+
+    def _open_settings(self):
+        """Open the settings dialog."""
+        from ui.settings import SettingsDialog
+        SettingsDialog.open()
 
     def _on_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
