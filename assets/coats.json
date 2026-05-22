@@ -1,0 +1,58 @@
+{
+  "ginger": {
+    "body": "#E8A87C",
+    "belly": "#FAD6B2",
+    "ear_inner": "#F0B8A0",
+    "nose": "#FF8C94",
+    "eye": "#4CAF50",
+    "paw_pad": "#E8917A"
+  },
+  "tuxedo": {
+    "body": "#2C2C2C",
+    "belly": "#F5F5F5",
+    "ear_inner": "#4A4A4A",
+    "nose": "#FF6B6B",
+    "eye": "#64B5F6",
+    "paw_pad": "#3A3A3A"
+  },
+  "calico": {
+    "body": "#F5F5F5",
+    "belly": "#FFF8E1",
+    "ear_inner": "#FFAB91",
+    "nose": "#FF8C94",
+    "eye": "#81C784",
+    "paw_pad": "#F5C6B0"
+  },
+  "russian_blue": {
+    "body": "#7C8E9E",
+    "belly": "#A8B8C8",
+    "ear_inner": "#D4A5A5",
+    "nose": "#FF8C94",
+    "eye": "#4CAF50",
+    "paw_pad": "#9AAAB8"
+  },
+  "orange_tabby": {
+    "body": "#D4875E",
+    "belly": "#F5CBB0",
+    "ear_inner": "#F0B8A0",
+    "nose": "#FF8C94",
+    "eye": "#64B5F6",
+    "paw_pad": "#D49A7A"
+  },
+  "white": {
+    "body": "#F0F0F0",
+    "belly": "#FFFFFF",
+    "ear_inner": "#FFCDD2",
+    "nose": "#FF8C94",
+    "eye": "#64B5F6",
+    "paw_pad": "#E8D5D5"
+  },
+  "siamese": {
+    "body": "#F5E6CC",
+    "belly": "#FFF3E0",
+    "ear_inner": "#5D4037",
+    "nose": "#5D4037",
+    "eye": "#42A5F5",
+    "paw_pad": "#4E342E"
+  }
+}
