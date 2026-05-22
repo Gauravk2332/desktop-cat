@@ -70,20 +70,10 @@ def main():
         logger.critical("Engine creation failed: %s", exc_info=True)
         sys.exit(1)
 
-    # 4. Create AI cat agent — remote LLM via clowbot proxy
-    try:
-        from behavior.agent import CatAgent
-        agent = CatAgent(
-            backend="remote",
-            remote_api_url="http://100.66.197.23:18990/v1/chat/completions",
-            remote_model="deepseek-chat",
-            decision_interval=2.0,
-        )
-        engine.set_agent(agent)
-        logger.info("CatAgent created (remote / deepseek)")
-    except Exception as e:
-        logger.warning("CatAgent creation failed (non-fatal): %s", e)
-        logger.info("Cat running without AI agent (fallback mode)")
+    # 4. Planner-based behavior replaces the old CatAgent.
+    # Phase 4 LLM layer integrates directly into the planner chain (Layer 3.5).
+    # No separate agent needed — the planner handles everything including LLM novelty.
+    logger.info("Behavior handled by planner (Phase 4 LLM layer active)")
 
     # 5. Pass state and engine reference to API
     from core.api import set_state_ref, set_engine_ref
