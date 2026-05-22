@@ -6,8 +6,11 @@ position. Cat drawn at its current screen coordinates.
 WA_TransparentForMouseEvents so it's click-through.
 """
 
+import logging
 import math
 import time
+
+logging.basicConfig(level=logging.WARNING)
 
 from PyQt6.QtWidgets import QWidget, QApplication
 from PyQt6.QtCore import Qt
@@ -95,8 +98,9 @@ class CatWindow(QWidget):
                 self._draw_sit(painter, cx, cy)
 
             painter.end()
-        except Exception:
-            pass
+        except Exception as e:
+            if config.DEBUG:
+                logging.exception("desktop-cat paintEvent failed: %s", e)
 
     # ── SIT pose ───────────────────────────────────────────────────
 
@@ -148,7 +152,9 @@ class CatWindow(QWidget):
     def _draw_sleep(self, painter, cx, cy):
         breath = math.sin(self.state.sleep_breath) * 0.02 + 1.0
         painter.save()
+        painter.translate(cx, cy)
         painter.scale(breath, breath)
+        painter.translate(-cx, -cy)
 
         base_r = 22 if not self.state.deep_sleep else 16
         base_y = int(cy - 10)
