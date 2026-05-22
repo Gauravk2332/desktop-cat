@@ -17,13 +17,13 @@ param(
     [int]$PollIntervalSec = 10
 )
 
-# ── Resolve paths ──
+# Resolve paths
 $LogDir = [System.Environment]::ExpandEnvironmentVariables($LogDir)
 $CatDir = [System.Environment]::ExpandEnvironmentVariables($CatDir)
 $LogPath = Join-Path $LogDir "desktop-cat.log"
 $PidFile = Join-Path $LogDir "desktop-cat.pid"
 
-# ── Ensure log directory exists ──
+# Ensure log directory exists
 New-Item -ItemType Directory -Path $LogDir -Force -ErrorAction SilentlyContinue | Out-Null
 
 function Write-Log {
@@ -53,7 +53,7 @@ function Start-CatProcess {
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
 
-    # ── Environment ──
+    # Environment
     $psi.Environment["QT_QPA_PLATFORM"] = "windows"
     $psi.Environment["PYTHONUNBUFFERED"] = "1"
 
@@ -61,7 +61,7 @@ function Start-CatProcess {
     $proc.StartInfo = $psi
     $proc.Start() | Out-Null
 
-    # ── Read stdout/stderr asynchronously ──
+    # Read stdout/stderr asynchronously
     $outTask = $proc.StandardOutput.ReadToEndAsync()
     $errTask = $proc.StandardError.ReadToEndAsync()
 
@@ -73,7 +73,7 @@ function Start-CatProcess {
     }
 }
 
-# ── Main Watchdog Loop ──
+# Main Watchdog Loop
 Write-Log "=== Desktop Cat Watchdog STARTED ==="
 Write-Log "CatDir: $CatDir"
 Write-Log "LogDir: $LogDir"
@@ -85,51 +85,46 @@ $consecutiveCrashes = 0
 $restartDelay = 0
 
 while ($true) {
-    # ── Launch cat ──
+    # Launch cat
     Write-Log "Starting Desktop Cat..."
     $ctx = Start-CatProcess
     $proc = $ctx.Process
     $consecutiveCrashes = 0
 
-    # ── Monitor loop ──
+    # Monitor loop
     while (!$proc.HasExited) {
-        # Write heartbeat every 5 polls
         Start-Sleep -Seconds $PollIntervalSec
-
         if ($proc.HasExited) {
             break
         }
     }
 
-    # ── Process exited ──
+    # Process exited
     $exitCode = $proc.ExitCode
     $runtimeSec = [math]::Round(((Get-Date) - $ctx.Started).TotalSeconds)
 
     try { $stdout = $ctx.OutTask.Result } catch { $stdout = "" }
     try { $stderr = $ctx.ErrTask.Result } catch { $stderr = "" }
 
-    # Log output
     if ($stdout) { Write-Log "STDOUT: $stdout" }
     if ($stderr) { Write-Log "STDERR: $stderr" }
 
     Write-Log "Cat exited. Code=$exitCode Runtime=${runtimeSec}s"
 
-    # ── Check if it ran long enough (not a crash-on-startup) ──
+    # Check if it ran long enough (not a crash-on-startup)
     if ($runtimeSec -ge $MinRunSec) {
-        # Normal exit or long run — reset crash counter
         $consecutiveCrashes = 0
         $restartDelay = 2
-        Write-Log "Ran > ${MinRunSec}s — clean restart."
+        Write-Log "Ran > ${MinRunSec}s -- clean restart."
     } else {
-        # Quick crash — back off
         $consecutiveCrashes++
         $restartDelay = [math]::Min(2 * $consecutiveCrashes, $MaxRestartDelaySec)
-        Write-Log "CRASH #$consecutiveCrashes — waiting ${restartDelay}s before restart"
+        Write-Log "CRASH #$consecutiveCrashes -- waiting ${restartDelay}s before restart"
     }
 
-    # ── Wait before restart ──
+    # Wait before restart
     Start-Sleep -Seconds $restartDelay
 
-    # ── Clean up ──
+    # Clean up
     Cleanup-Process $proc
 }
