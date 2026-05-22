@@ -42,6 +42,7 @@ def main():
     # 6. System tray
     from ui.tray import CatTrayIcon
     tray = CatTrayIcon(app, state, window)
+    tray.engine = engine  # wire engine ref for save_state
     tray.show()
 
     # 7. Show window

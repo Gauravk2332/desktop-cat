@@ -173,7 +173,28 @@ BLINK_INTERVAL_MAX = 6.0
 BLINK_DURATION     = 0.10
 
 
-# ─── Weather ──────────────────────────────────────────────────────────────
+# ─── Multi-Pet ────────────────────────────────────────────────────────
+MAX_CATS = 3                    # max number of cats (configurable)
+DEFAULT_CATS = 1                # number of cats at fresh install
+CAT_SPAWN_OFFSET_MIN = 20       # px offset range for new cats
+CAT_SPAWN_OFFSET_MAX = 80
+MULTI_HUT_GAP = 10              # px gap between huts
+
+
+# ─── Coat Colors ─────────────────────────────────────────────────────────
+COAT_COLORS = [
+    # (body, belly, paw) - each is a QColor
+    QColor(0x7C, 0x8E, 0x9E),  # 0: Russian Blue (default)
+    QColor(0xF5, 0xDE, 0xB3),  # 1: Cream
+    QColor(0x8B, 0x6F, 0x47),  # 2: Brown Tabby
+    QColor(0x2F, 0x2F, 0x2F),  # 3: Black
+    QColor(0xFF, 0xFF, 0xFF),  # 4: White
+    QColor(0xD4, 0x7E, 0x6A),  # 5: Ginger
+    QColor(0xA0, 0xA0, 0xA0),  # 6: Gray
+]
+
+
+# ─── Weather ──────────────────────────────────────────────────────────────────────────────
 WEATHER_CITY = "Mumbai"             # Default city for wttr.in
 WEATHER_CACHE_INTERVAL = 1800       # Seconds between fetches (30 min)
 WEATHER_RETRIES = 3                  # Fetch retry count

@@ -43,19 +43,27 @@ class _APIHandler(BaseHTTPRequestHandler):
         if parsed.path == "/":
             try:
                 s = _STATE
+                cats_data = []
+                for cat in s.cats:
+                    cats_data.append({
+                        "id": cat["id"],
+                        "state": cat["state"],
+                        "energy": round(cat.get("energy", 0.0), 1),
+                        "hunger": round(cat.get("hunger", 0.0), 1),
+                        "boredom": round(cat.get("boredom", 0.0), 1),
+                        "facing": cat.get("facing", True),
+                        "x": round(cat.get("x", 0.0), 0),
+                        "y": round(cat.get("y", 0.0), 0),
+                        "at_home": cat.get("at_home", False),
+                        "coat": cat.get("coat", 0),
+                    })
                 data = {
                     "status": "alive",
                     "state": "desktop-cat-v2-modular",
-                    "cat": {
-                        "state": s.state,
-                        "energy": round(s.energy, 1),
-                        "hunger": round(s.hunger, 1),
-                        "boredom": round(s.boredom, 1),
-                        "facing": s.facing,
-                        "x": round(s.cat_x, 0),
-                        "y": round(s.cat_y, 0),
-                        "at_home": s.at_home,
-                    }
+                    "cat_count": len(cats_data),
+                    "cats": cats_data,
+                    # Backward compat: first cat
+                    "cat": cats_data[0] if cats_data else None,
                 }
             except Exception:
                 data = {"status": "alive", "state": "desktop-cat-v2-modular"}

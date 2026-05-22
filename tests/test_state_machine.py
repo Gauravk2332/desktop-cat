@@ -74,13 +74,13 @@ class TestStateTransitions(unittest.TestCase):
     def _run_ticks(self, transitions, n=100):
         """Run N ticks to allow state machine to settle."""
         for _ in range(n):
-            transitions.update(self.dt, self.state)
+            transitions.update(self.dt, self.state.cats[0], self.state)
 
     def test_sit_to_sleep_low_energy(self):
         """SIT -> GO_HOME when energy drops below HOME_ENERGY_THRESHOLD (priority over field sleep)."""
         trans = self._import_transitions()
         self.state.energy = 35.0  # below HOME_ENERGY_THRESHOLD (40)
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         # GO_HOME fires before SLEEP due to priority order
         self.assertEqual(self.state.state, config.STATE_GO_HOME)
 
@@ -89,7 +89,7 @@ class TestStateTransitions(unittest.TestCase):
         trans = self._import_transitions()
         self.state.energy = 90.0
         self.state.boredom = config.HOME_BOREDOM_THRESHOLD + 1.0  # > 70
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         # GO_HOME fires before SLEEP due to priority order
         self.assertEqual(self.state.state, config.STATE_GO_HOME)
 
@@ -99,7 +99,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.state = config.STATE_SLEEP
         self.state.at_home = True
         self.state.energy = config.HOME_NAP_MIN_ENERGY + 1.0
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_SIT)
 
     def test_sleep_to_sit_field(self):
@@ -108,14 +108,14 @@ class TestStateTransitions(unittest.TestCase):
         self.state.state = config.STATE_SLEEP
         self.state.at_home = False
         self.state.energy = 86.0
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_SIT)
 
     def test_go_home_triggers_low_energy(self):
         """SIT -> GO_HOME when energy below HOME_ENERGY_THRESHOLD."""
         trans = self._import_transitions()
         self.state.energy = config.HOME_ENERGY_THRESHOLD - 1.0
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_GO_HOME)
 
     def test_sleep_linger_resets_at_home(self):
@@ -124,14 +124,14 @@ class TestStateTransitions(unittest.TestCase):
         self.state.state = config.STATE_SLEEP
         self.state.at_home = True
         self.state.energy = 95.0
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_SIT)
         self.assertTrue(self.state.at_home)  # lingering
         self.assertGreater(self.state.home_linger, 0)
 
         # Run ticks until linger expires
         self.state.home_linger = 0.0  # force expire
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         self.assertFalse(self.state.at_home)
 
     def test_wander_triggers_when_conditions_met(self):
@@ -145,7 +145,7 @@ class TestStateTransitions(unittest.TestCase):
         # Force wander chance high by patching datetime
         with patch("behavior.transitions._wander_chance_per_tick") as mock_chance:
             mock_chance.return_value = 1.0  # 100% chance
-            trans.update(self.dt, self.state)
+            trans.update(self.dt, self.state.cats[0], self.state)
 
         # Should be in WANDER if not at home
         if not self.state.at_home:
@@ -157,7 +157,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.state = config.STATE_WALK
         self.state.walk_duration = 2.0
         self.state.walk_elapsed = 3.0  # over 2.0 + 0.5
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_SIT)
 
     def test_walk_sits_under_duration(self):
@@ -166,7 +166,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.state = config.STATE_WALK
         self.state.walk_duration = 3.0
         self.state.walk_elapsed = 2.0  # still under
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_WALK)
 
     def test_boredom_home_visit(self):
@@ -176,7 +176,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.boredom = config.HOME_BOREDOM_THRESHOLD + 1.0
         self.state.home_cooldown = 0.0
         self.state.at_home = False
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_GO_HOME)
 
     def test_field_sleep_not_at_home(self):
@@ -185,7 +185,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state.state = config.STATE_SLEEP
         self.state.at_home = False  # field sleep (not at home)
         self.state.energy = config.HOME_NAP_MIN_ENERGY + 1.0  # 61 < 85 field threshold
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         # Field threshold is 85, energy 61 < 85, so stays asleep
         self.assertEqual(self.state.state, config.STATE_SLEEP,
                          "Should stay asleep if energy < 85 (field threshold)")
@@ -195,7 +195,7 @@ class TestStateTransitions(unittest.TestCase):
         trans = self._import_transitions()
         self.state.energy = config.HOME_ENERGY_THRESHOLD - 1.0  # below threshold
         self.state.boredom = 0.0  # not bored
-        trans.update(self.dt, self.state)
+        trans.update(self.dt, self.state.cats[0], self.state)
         self.assertEqual(self.state.state, config.STATE_GO_HOME,
                          "Energy should trigger GO_HOME even without boredom")
 
@@ -218,7 +218,7 @@ class TestNeedsSystem(unittest.TestCase):
         needs = self._import_needs()
         self.state.state = config.STATE_WALK
         self.state.energy = 100.0
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         self.assertLess(self.state.energy, 100.0)
 
     def test_sit_drains_slowly(self):
@@ -226,7 +226,7 @@ class TestNeedsSystem(unittest.TestCase):
         needs = self._import_needs()
         self.state.state = config.STATE_SIT
         self.state.energy = 100.0
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         # Energy should have decreased (drain rate * modifiers applied)
         self.assertLess(self.state.energy, 100.0)
         # Should not have decreased by more than ACTIVE drain
@@ -237,14 +237,14 @@ class TestNeedsSystem(unittest.TestCase):
         needs = self._import_needs()
         self.state.state = config.STATE_SLEEP
         self.state.energy = 50.0
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         self.assertGreater(self.state.energy, 50.0)
 
     def test_hunger_increases_over_time(self):
         """Hunger rises over time."""
         needs = self._import_needs()
         self.state.hunger = 20.0
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         self.assertGreater(self.state.hunger, 20.0)
 
     def test_boredom_increases_when_sitting(self):
@@ -252,7 +252,7 @@ class TestNeedsSystem(unittest.TestCase):
         needs = self._import_needs()
         self.state.state = config.STATE_SIT
         self.state.boredom = 0.0
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         self.assertGreater(self.state.boredom, 0.0)
 
     def test_boredom_decreases_during_walk(self):
@@ -261,7 +261,7 @@ class TestNeedsSystem(unittest.TestCase):
         self.state.state = config.STATE_WALK
         self.state.boredom = 10.0
         before = self.state.boredom
-        needs.update(self.dt, self.state)
+        needs.update(self.dt, self.state.cats[0], self.state)
         self.assertLess(self.state.boredom, before,
                         "Boredom should decrease during WALK")
 
@@ -270,7 +270,7 @@ class TestNeedsSystem(unittest.TestCase):
         needs = self._import_needs()
         self.state.state = config.STATE_SLEEP
         self.state.boredom = 50.0
-        needs.update(5.0, self.state)  # 5 seconds
+        needs.update(5.0, self.state.cats[0], self.state)  # 5 seconds
         self.assertLess(self.state.boredom, 50.0)
 
     def test_needs_clamped_upper(self):
@@ -280,7 +280,7 @@ class TestNeedsSystem(unittest.TestCase):
         self.state.state = config.STATE_SLEEP
         # Run many ticks to push energy past 100
         for _ in range(100):
-            needs.update(1.0, self.state)
+            needs.update(1.0, self.state.cats[0], self.state)
         self.assertLessEqual(self.state.energy, 100.0)
 
     def test_needs_clamped_lower(self):
@@ -289,7 +289,7 @@ class TestNeedsSystem(unittest.TestCase):
         self.state.energy = 0.0
         self.state.state = config.STATE_WALK
         for _ in range(100):
-            needs.update(1.0, self.state)
+            needs.update(1.0, self.state.cats[0], self.state)
         self.assertGreaterEqual(self.state.energy, 0.0)
 
 

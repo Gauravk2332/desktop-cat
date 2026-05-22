@@ -2,7 +2,8 @@
 cat/home.py — Draw the cat's hut (house).
 
 Pure draw functions. Uses SCREEN-relative coordinates.
-Hut is always visible at the bottom-right of the screen.
+Huts are placed left-to-right from right edge.
+Each cat (by hut_index) gets its own hut.
 
 Drawing order in window.py:
   1. draw_hut_frame   (interior dark area — behind cat)
@@ -18,35 +19,42 @@ from PyQt6.QtGui import QPainterPath, QColor, QFont, QPen
 import config
 
 
-def draw_hut_frame(painter, state) -> None:
+def _hut_x(state, hut_index: int = 0) -> int:
+    """Return x position of hut for given index (0 = rightmost)."""
+    gap = config.MULTI_HUT_GAP
+    total_w = config.HUT_WIDTH + gap
+    return state.screen_width - config.HUT_PADDING_RIGHT - config.HUT_WIDTH - (hut_index * total_w)
+
+
+def _hut_door_center(state, hut_index: int = 0) -> tuple[int, int]:
+    """Return (hx, hy) center of the hut doorway in SCREEN coordinates.
+    This is the GO_HOME target — cat sleeps here inside the hut."""
+    hx = _hut_x(state, hut_index) + config.HUT_WIDTH // 2
+    hy = state.screen_height - config.HUT_PADDING_BOTTOM - config.HUT_DOOR_FLOOR
+    return hx, hy
+
+
+def draw_hut_frame(painter, state, hut_index: int = 0) -> None:
     """Draw the hut interior + shadow. Call FIRST as background."""
-    hx, hy = _hut_door_center(state)
+    hx, hy = _hut_door_center(state, hut_index)
     _draw_hut_interior(painter, hx, hy)
     _draw_hut_shadow(painter, hx, hy)
 
 
-def draw_hut_front(painter, state) -> None:
+def draw_hut_front(painter, state, hut_index: int = 0) -> None:
     """Draw the hut front (walls, roof, trim). Call LAST to overlay cat."""
-    hx, hy = _hut_door_center(state)
+    hx, hy = _hut_door_center(state, hut_index)
     _draw_hut_walls(painter, hx, hy)
     _draw_hut_roof(painter, hx, hy)
     _draw_hut_door_trim(painter, hx, hy)
     _draw_hut_doormat(painter, hx, hy)
 
 
-def draw_sleeping_cat(painter, state) -> None:
+def draw_sleeping_cat(painter, state, hut_index: int = 0) -> None:
     """Draw curled cat sleeping inside the hut + Z badge."""
-    hx, hy = _hut_door_center(state)
+    hx, hy = _hut_door_center(state, hut_index)
     _draw_curled_cat(painter, hx, hy, state)
     _draw_z_badge(painter, hx, hy, state)
-
-
-def _hut_door_center(state) -> tuple[int, int]:
-    """Return (hx, hy) center of the hut doorway in SCREEN coordinates.
-    This is the GO_HOME target — cat sleeps here inside the hut."""
-    hx = state.screen_width - config.HUT_PADDING_RIGHT - config.HUT_WIDTH // 2
-    hy = state.screen_height - config.HUT_PADDING_BOTTOM - config.HUT_DOOR_FLOOR
-    return hx, hy
 
 
 # ── Drawing helpers (relative to door center hx, hy) ─────────────────
@@ -243,14 +251,19 @@ def _draw_curled_cat(painter, hx: int, hy: int, state) -> None:
 
 
 def draw_hearts(painter, state) -> None:
-    """Draw floating hearts above the cat when petted."""
-    for h in list(state.hearts):
+    """Draw floating hearts above all cats."""
+    _draw_cat_hearts(painter, state, is_shared=False)
+
+
+def draw_cat_hearts(painter, cat) -> None:
+    """Draw floating hearts for a single cat dict."""
+    for h in list(cat.get("hearts", [])):
         x_offset, y_offset, lifetime, size = h
         if lifetime <= 0:
             continue
 
-        cx = state.cat_x + x_offset
-        cy = state.cat_y + y_offset
+        cx = cat["x"] + x_offset
+        cy = cat["y"] + y_offset
         heart_size = size
         alpha = min(255, int(lifetime * 255))
 
@@ -271,6 +284,12 @@ def draw_hearts(painter, state) -> None:
         heart_path.lineTo(cx, cy + r * 0.6)
         heart_path.closeSubpath()
         painter.drawPath(heart_path)
+
+
+def _draw_cat_hearts(painter, state, is_shared=False):
+    """Backward compat wrapper — draws hearts from cats[0]."""
+    if state.cats:
+        draw_cat_hearts(painter, state.cats[0])
 
 
 _SPEECH_BUBBLE_COLOR = QColor(42, 42, 42, 200)
@@ -357,6 +376,18 @@ def draw_speech_bubble(painter, state, cat_x: float, cat_y: float,
     painter.drawPolygon(tail_pts)
 
     painter.restore()
+
+
+def draw_speech_bubble_for_cat(painter, cat, state) -> None:
+    """Draw speech bubble for a cat dict, using its speech sub-dict."""
+    speech = cat.get("speech", {})
+    if speech.get("text") is None:
+        return
+    # Temporarily patch state.speech so the legacy draw function works
+    original = state.speech
+    state.speech = speech
+    draw_speech_bubble(painter, state, cat["x"], cat["y"], cat.get("facing", True))
+    state.speech = original
 
 
 def _draw_z_badge(painter, hx: int, hy: int, state) -> None:

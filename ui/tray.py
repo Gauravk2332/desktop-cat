@@ -13,6 +13,7 @@ class CatTrayIcon:
         self.app = app
         self.state = state
         self.window = window
+        self.engine = None  # set externally after engine init
         self.tray = QSystemTrayIcon()
 
         # Load icon
@@ -41,6 +42,16 @@ class CatTrayIcon:
         self.menu.addAction(self.act_show)
         self.menu.addSeparator()
 
+        # ── Multi-cat management ──
+        self.act_add_cat = QAction("Add Cat ➕", self.menu)
+        self.act_add_cat.triggered.connect(self._add_cat)
+        self.menu.addAction(self.act_add_cat)
+
+        self.act_remove_cat = QAction("Remove Last Cat ➖", self.menu)
+        self.act_remove_cat.triggered.connect(self._remove_last_cat)
+        self.menu.addAction(self.act_remove_cat)
+        self.menu.addSeparator()
+
         self.act_settings = QAction("Settings...", self.menu)
         self.act_settings.triggered.connect(self._open_settings)
         self.menu.addAction(self.act_settings)
@@ -49,6 +60,44 @@ class CatTrayIcon:
         self.act_quit = QAction("Quit", self.menu)
         self.act_quit.triggered.connect(self.app.quit)
         self.menu.addAction(self.act_quit)
+
+    def _add_cat(self):
+        """Add a new cat (max MAX_CATS)."""
+        import config as _cfg
+        max_cats = _cfg.MAX_CATS
+        if len(self.state.cats) >= max_cats:
+            self._show_notification("🐱 Max cats reached",
+                                    f"Maximum {max_cats} cats allowed")
+            return
+        cat_id = self.state.add_cat()
+        if cat_id >= 0:
+            # Save state
+            if self.engine is not None:
+                self.engine.save_state()
+            self._show_notification("🐱 Cat joined!",
+                                    f"Cat #{cat_id + 1} has arrived")
+
+    def _remove_last_cat(self):
+        """Remove the most recently added cat (keep at least 1)."""
+        if len(self.state.cats) <= 1:
+            self._show_notification("🐱 Minimum 1 cat",
+                                    "Must keep at least one cat")
+            return
+        removed = self.state.cats.pop()
+        # Save state
+        if self.engine is not None:
+            self.engine.save_state()
+        self._show_notification("🐱 Cat left",
+                                f"Cat #{len(self.state.cats) + 1} has left")
+
+    def _show_notification(self, title: str, message: str):
+        """Show a tray notification."""
+        try:
+            self.tray.showMessage(title, message,
+                                  QSystemTrayIcon.MessageIcon.Information,
+                                  3000)
+        except Exception:
+            pass
 
     def _open_settings(self):
         """Open the settings dialog."""
