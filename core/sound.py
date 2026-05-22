@@ -32,6 +32,7 @@ class SoundManager:
         self._enabled = True
         self._tier = self._detect_best_tier()
         self._player = None  # QSoundEffect instance (tier 1)
+        self._active_shots: list = []  # keep one-shot effects alive until finish
         logger.info("SoundManager initialized (tier=%d)", self._tier)
 
     # ── Tier Detection ────────────────────────────────────────
@@ -133,18 +134,30 @@ class SoundManager:
     # ── Tier 1: QSoundEffect ─────────────────────────────────
 
     def _play_tier1(self, path: str):
-        """Play via QSoundEffect (fire-and-forget)."""
+        """Play via QSoundEffect (fire-and-forget).
+
+        Keeps a reference to the effect until playback completes to
+        prevent Python GC from collecting it before Qt can play.
+        """
         try:
             from PyQt6.QtMultimedia import QSoundEffect
             from PyQt6.QtCore import QUrl
             effect = QSoundEffect()
             effect.setSource(QUrl.fromLocalFile(path))
-            effect.setVolume(0.5)
+            effect.setVolume(0.7)
+            effect.playingChanged.connect(lambda: self._on_shot_finished(effect))
             effect.play()
-            # Allow effect to self-destruct after play
-            # (QSoundEffect cleans up when reference count drops)
+            self._active_shots.append(effect)
         except Exception as e:
             logger.warning("QSoundEffect play failed: %s", e)
+
+    def _on_shot_finished(self, effect) -> None:
+        """Remove finished one-shot effects from the keep-alive list."""
+        try:
+            if not effect.isPlaying() and effect in self._active_shots:
+                self._active_shots.remove(effect)
+        except (RuntimeError, ValueError):
+            pass
 
     def _start_loop_tier1(self, path: str):
         """Start looping via QSoundEffect."""
@@ -153,7 +166,7 @@ class SoundManager:
             from PyQt6.QtCore import QUrl
             effect = QSoundEffect()
             effect.setSource(QUrl.fromLocalFile(path))
-            effect.setVolume(0.3)
+            effect.setVolume(0.5)
             effect.setLoopCount(-1)  # Infinite
             effect.play()
             self._player = effect
@@ -175,4 +188,5 @@ class SoundManager:
     def cleanup(self):
         """Stop any active sound playback and release resources."""
         self.stop_loop()
+        self._active_shots.clear()
         logger.debug("SoundManager cleaned up")
