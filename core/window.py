@@ -20,11 +20,12 @@ if sys.platform == "win32":
 logging.basicConfig(level=logging.WARNING)
 
 from PyQt6.QtWidgets import QWidget, QApplication
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QElapsedTimer
 from PyQt6.QtGui import QPainter, QPainterPath, QColor, QPen, QFont
 
 import config
 from core.state import CatState, CatProxy
+from core.renderer import SpriteRenderer
 from cat import body as cat_body, tail, legs, head, eyes
 from cat.stripes import draw_coat_pattern
 from cat.home import (
@@ -62,6 +63,11 @@ class CatWindow(QWidget):
         )
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._position_window()
+
+        # Sprite renderer (falls back to QPainter if no sprites)
+        self._sprite_renderer = SpriteRenderer()
+        self._paint_timer = QElapsedTimer()
+        self._paint_timer.start()
 
         # Keyboard controls
         self.controls = Controls(self, state, engine)
@@ -182,20 +188,35 @@ class CatWindow(QWidget):
                 except Exception as e:
                     logging.debug("draw_hut_front failed: %s", e)
 
-                # Dispatch by state — pass proxy for drawing functions
-                try:
-                    if state_str == config.STATE_SLEEP:
-                        if not at_home:
-                            self._draw_sleep(painter, cx, cy, proxy)
-                    elif state_str in (config.STATE_WALK, config.STATE_WANDER,
-                                       config.STATE_CHASE, config.STATE_PLAY):
-                        self._draw_walk(painter, cx, cy, proxy)
-                    else:
-                        self._draw_sit(painter, cx, cy, proxy)
-                except Exception as e:
-                    logging.debug("cat pose draw failed: %s", e)
+                # Dispatch via SpriteRenderer (falls back to QPainter)
+                dt = self._paint_timer.elapsed() / 1000.0
+                self._paint_timer.restart()
 
-                # Reset opacity
+                def fallback_draw(cat_obj, p):
+                    """Legacy QPainter fallback for when sprites aren't loaded."""
+                    try:
+                        s = getattr(cat_obj, "state", cat_obj.get("state", "SIT"))
+                        is_home = bool(getattr(cat_obj, "at_home", cat_obj.get("at_home", False)))
+                        cxx = float(getattr(cat_obj, "x", cat_obj.get("x", cx)))
+                        cyy = float(getattr(cat_obj, "y", cat_obj.get("y", cy)))
+                        if s == config.STATE_SLEEP:
+                            if not is_home:
+                                self._draw_sleep(p, cxx, cyy, cat_obj)
+                        elif s in (config.STATE_WALK, config.STATE_WANDER,
+                                   config.STATE_CHASE, config.STATE_PLAY):
+                            self._draw_walk(p, cxx, cyy, cat_obj)
+                        else:
+                            self._draw_sit(p, cxx, cyy, cat_obj)
+                    except Exception as e:
+                        logging.debug("fallback draw failed: %s", e)
+
+                try:
+                    self._sprite_renderer.draw(proxy, painter, dt, draw_fallback_fn=fallback_draw)
+                except Exception as e:
+                    logging.debug("sprite draw failed: %s", e)
+                    fallback_draw(proxy, painter)
+
+                # If renderer used fallback, it may have set opacity
                 painter.setOpacity(1.0)
 
                 # Draw floating hearts (per cat)
