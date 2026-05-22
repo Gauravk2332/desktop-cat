@@ -164,9 +164,10 @@ PLAY_TOY_DURATION = 5.0
 PLAY_TOY_REACH_DISTANCE = 20.0
 
 # ─── Animation Timing ─────────────────────────────────────────────────────
-BLINK_INTERVAL_MIN = 2.0
-BLINK_INTERVAL_MAX = 6.0
-BLINK_DURATION     = 0.10
+BLINK_INTERVAL_MIN = 10       # seconds
+BLINK_INTERVAL_MAX = 20       # seconds
+BLINK_DURATION     = 0.15     # seconds (150ms)
+SHOW_BLINK_VISUAL  = True     # show horizontal bar over eye region during blink (placeholder)
 
 
 # ─── Sprite Rendering ─────────────────────────────────────────────────────
@@ -178,6 +179,14 @@ SHADOW_OPACITY = 0.10                  # drop shadow opacity (0.0-1.0)
 SILHOUETTE_SHADOW = True               # extra blur layer behind cat
 CROSSFADE_MS = 200                     # transition crossfade duration
 RENDERER_BACKEND = "sprite"             # "sprite" | "qpainter" (fallback)
+
+
+# ─── Phase 1: Night Mode + LOD ─────────────────────────────────────────
+NIGHT_MODE = False                       # enable night palette (engine sets dynamically)
+NIGHT_DESATURATE = 0.20                  # 20% color desaturation at night
+LOD_OUTLINE_THRESHOLD = 150              # px — below this size, add 1px outline
+LOD_OUTLINE_COLOR = "#1a1a1a"           # dark outline for small sprites
+LOD_OUTLINE_OPACITY = 0.5                # outline opacity
 
 
 # ─── Multi-Pet ────────────────────────────────────────────────────────

@@ -398,15 +398,19 @@ class Engine:
             # Blink
             cat["blink_timer"] = cat.get("blink_timer", 0.0) + dt
             if cat.get("blinking"):
-                if cat["blink_timer"] > 0.15:
+                if cat["blink_timer"] > config.BLINK_DURATION:
                     cat["blinking"] = False
                     cat["blink_timer"] = 0.0
                     cat["next_blink"] = random.uniform(
                         config.BLINK_INTERVAL_MIN, config.BLINK_INTERVAL_MAX
                     )
-            elif cat["blink_timer"] > cat.get("next_blink", 2.0):
+                    if config.DEBUG:
+                        logging.debug("Cat %d blink ended", cat.get("id", 0))
+            elif cat["blink_timer"] > cat.get("next_blink", config.BLINK_INTERVAL_MIN):
                 cat["blinking"] = True
                 cat["blink_timer"] = 0.0
+                if config.DEBUG:
+                    logging.debug("Cat %d blink started", cat.get("id", 0))
 
             # Sleep breathing + Zzz
             if cat["state"] == config.STATE_SLEEP:

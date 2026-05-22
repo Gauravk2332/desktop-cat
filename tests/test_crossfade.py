@@ -229,6 +229,11 @@ def test_renderer_backend_config():
     assert config.CAT_SIZE_MAX == 350
     assert config.SHADOW_OPACITY == 0.10
     assert config.SILHOUETTE_SHADOW is True
+    assert config.NIGHT_MODE is False
+    assert config.NIGHT_DESATURATE == 0.20
+    assert config.LOD_OUTLINE_THRESHOLD == 150
+    assert config.LOD_OUTLINE_COLOR == "#1a1a1a"
+    assert config.LOD_OUTLINE_OPACITY == 0.5
     print("  [PASS] Config: all sprite/renderer constants present and correct")
 
 
@@ -236,7 +241,9 @@ def test_silhouette_shadow_is_default():
     """Verify silhouette shadow is enabled by default (Muse requirement)."""
     assert config.SILHOUETTE_SHADOW is True, \
         "Silhouette shadow must be enabled by default"
-    print("  [PASS] SILHOUETTE_SHADOW enabled by default (Muse)")
+    assert config.SHOW_BLINK_VISUAL is True, \
+        "Blink visual must be enabled by default"
+    print("  [PASS] Phase 1: SILHOUETTE_SHADOW + SHOW_BLINK_VISUAL + LOD + Night mode config")
 
 
 if __name__ == "__main__":

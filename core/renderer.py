@@ -332,6 +332,36 @@ class SpriteRenderer:
                 # Fallback per-frame
                 draw_fallback_fn(cat, painter)
 
+        # Blink visual placeholder (sprite overlay bar during blink)
+        if config.SHOW_BLINK_VISUAL:
+            blinking = getattr(cat, "blinking", cat.get("blinking", False))
+            if blinking:
+                self._draw_blink_visual(painter, cx, cy, scale, facing)
+
+        # Night mode desaturation (post-process)
+        if config.NIGHT_MODE:
+            painter.save()
+            # Semi-transparent gray overlay approximates desaturation
+            gray = int(128 * config.NIGHT_DESATURATE * 4)  # map 0.20 → ~102 gray
+            overlay = QColor(gray, gray, gray, int(255 * config.NIGHT_DESATURATE * 0.6))
+            painter.fillRect(int(cx - 200 * scale), int(cy - 240 * scale),
+                             int(400 * scale), int(480 * scale), overlay)
+            painter.restore()
+
+        # LOD outline: 1px dark rect when cat is small (improves legibility)
+        if config.CAT_SIZE_DEFAULT <= config.LOD_OUTLINE_THRESHOLD:
+            painter.save()
+            ol_color = QColor(config.LOD_OUTLINE_COLOR)
+            ol_color.setAlphaF(config.LOD_OUTLINE_OPACITY)
+            pen = painter.pen()
+            painter.setPen(ol_color)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            hw = int(config.SPRITE_SIZE * scale * 0.55)
+            hh = int(config.SPRITE_SIZE * scale * 0.45)
+            painter.drawRect(int(cx - hw), int(cy - hh), int(hw * 2), int(hh * 2))
+            painter.setPen(pen)
+            painter.restore()
+
     # ─── Crossfade drawing ───────────────────────────────────────────
 
     def _draw_crossfade(
@@ -467,6 +497,38 @@ class SpriteRenderer:
                 int(cy - ph // 2),
                 pix,
             )
+
+    # ─── Blink visual ───────────────────────────────────────────────
+
+    def _draw_blink_visual(
+        self, painter: QPainter,
+        cx: float, cy: float, scale: float, facing: bool,
+    ) -> None:
+        """Draw a temporary horizontal bar over the eye region during a blink.
+
+        This is a placeholder until real eye overlay sprites are available.
+        The eye region is ~35% from the top of the frame, centered horizontally
+        (side-view cat in a SPRITE_SIZE x SPRITE_SIZE canvas).
+        """
+        try:
+            sprite_h = config.SPRITE_SIZE * scale  # scaled sprite height
+            eye_y = cy - sprite_h / 2.0 + config.SPRITE_SIZE * 0.35 * scale
+            bar_w = max(4, int(14 * scale))
+            bar_h = max(1, int(3 * scale))
+
+            painter.save()
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(0xBB, 0xBB, 0xBB, 160))
+
+            # Draw two bars (left and right eye, symmetric around center)
+            for side in (-1, 1):
+                bar_x = int(cx + side * (6 * scale) - bar_w // 2)
+                bar_y = int(eye_y - bar_h // 2)
+                painter.drawRect(bar_x, bar_y, bar_w, bar_h)
+
+            painter.restore()
+        except Exception:
+            pass  # fail-safe: no blink visual if anything goes wrong
 
     # ─── State → Animation mapping ───────────────────────────────────
 
