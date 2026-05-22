@@ -135,6 +135,19 @@ class _APIHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "state not available"}, 503)
             return
+        elif action == "set_coat":
+            s = _STATE
+            if s and s.cats:
+                cat_id = int(data.get("cat_id", 0))
+                coat = int(data.get("coat", 0))
+                for cat in s.cats:
+                    if cat["id"] == cat_id:
+                        cat["coat"] = coat
+                        break
+                self._send_json({"status": "ok"})
+            else:
+                self._send_json({"error": "state not available"}, 503)
+            return
         elif action in ("pet", "feed", "wake"):
             action_queue.put(action)
             self._send_json({"status": "ok", "action": action})
