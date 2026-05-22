@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import QApplication
 import config
 from core.state import CatState
 import core.navigation as navigation
+from core.sound import SoundManager
 
 
 class Engine:
@@ -33,6 +34,10 @@ class Engine:
     def __init__(self, state: CatState, window):
         self.state = state
         self.window = window
+        self.sound = SoundManager()
+        self._prev_state = state.state
+        self._prev_at_home = state.at_home
+        self._footstep_counter = 0.0
         self.systems: OrderedDict[str, object] = OrderedDict()
         self._elapsed = QElapsedTimer()
         self._elapsed.start()
@@ -132,7 +137,10 @@ class Engine:
             for name, system in self.systems.items():
                 system.update(dt, self.state)
 
-            # 2. Internal animation updates
+            # 2. Sound system
+            self._update_sounds(dt)
+
+            # 3. Internal animation updates
             self._update_animations(dt)
 
             # 3. Process external action queue
@@ -152,6 +160,54 @@ class Engine:
 
         except Exception as e:
             logging.exception("desktop-cat engine tick failed: %s", e)
+
+    # ── Sound system ───────────────────────────────────────────────────
+
+    def _update_sounds(self, dt: float) -> None:
+        """Handle sound playback based on state transitions."""
+        s = self.state
+
+        # Load current settings for mute state
+        try:
+            from ui.settings import AppSettings
+            self.sound.set_enabled(AppSettings.load().sound_enabled)
+        except ImportError:
+            pass
+
+        # State transition detection
+        if s.state != self._prev_state:
+            if s.state == config.STATE_SLEEP:
+                if s.at_home:
+                    self.sound.start_loop("purr")
+                else:
+                    self.sound.start_loop("sleep_breathing")
+            elif self._prev_state == config.STATE_SLEEP:
+                self.sound.stop_loop()
+                self.sound.play("yawn")
+            elif s.state in (config.STATE_WALK, config.STATE_WANDER):
+                self.sound.play("footstep")
+            elif s.state == config.STATE_GO_HOME:
+                self.sound.play("meow_short")
+
+        self._prev_state = s.state
+
+        # At-home vs field sleep sound switch
+        if s.state == config.STATE_SLEEP and s.at_home != self._prev_at_home:
+            self.sound.stop_loop()
+            if s.at_home:
+                self.sound.start_loop("purr")
+            else:
+                self.sound.start_loop("sleep_breathing")
+
+        self._prev_at_home = s.at_home
+
+        # Footstep rhythm during walk/wander
+        if s.state in (config.STATE_WALK, config.STATE_WANDER):
+            self._footstep_counter += dt
+            if self._footstep_counter >= 0.3:
+                self._footstep_counter = 0.0
+                suffix = "2" if s.walk_frame % 2 == 0 else ""
+                self.sound.play(f"footstep{suffix}")
 
     def _update_animations(self, dt: float) -> None:
         s = self.state
@@ -264,6 +320,7 @@ class Engine:
                     s.consecutive_pets = 0
                 elif random.random() < 0.4:
                     self._trigger_purr()
+                    self.sound.play("purr")
                     s.consecutive_pets += 1
 
         # Approach walk (mouse within 80px)
