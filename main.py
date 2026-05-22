@@ -37,8 +37,14 @@ def main():
     # 5. Start HTTP API daemon
     start_api()
 
-    # 6. Show window
+    # 6. System tray
+    from ui.tray import CatTrayIcon
+    tray = CatTrayIcon(app, state)
+    tray.show()
+
+    # 7. Show window
     window.show()
+    window._remove_dwm_border()
 
     sys.exit(app.exec())
 

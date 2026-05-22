@@ -8,7 +8,12 @@ WA_TransparentForMouseEvents so it's click-through.
 
 import logging
 import math
+import sys
 import time
+
+# Guarded ctypes import for Windows DWM border fix
+if sys.platform == "win32":
+    import ctypes
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -39,6 +44,31 @@ class CatWindow(QWidget):
             | Qt.WindowType.X11BypassWindowManagerHint
         )
         self._position_window()
+
+    # ── DWM Border Fix (Windows 11) ────────────────────────────────────
+
+    def _remove_dwm_border(self):
+        """Remove forced border and rounded corners on Windows 11.
+        Safe no-op on non-Windows platforms."""
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = int(self.winId())
+            dwmapi = ctypes.windll.dwmapi
+            # Remove forced border
+            DWMWA_BORDER_COLOR = 34
+            DWMWA_COLOR_NONE = 0xFFFFFFFE
+            color = ctypes.c_uint32(DWMWA_COLOR_NONE)
+            dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,
+                ctypes.byref(color), ctypes.sizeof(color))
+            # Disable rounded corners
+            DWMWA_WINDOW_CORNER_PREFERENCE = 33
+            DWMWCP_DONOTROUND = 1
+            pref = ctypes.c_int(DWMWCP_DONOTROUND)
+            dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
+                ctypes.byref(pref), ctypes.sizeof(pref))
+        except Exception as e:
+            logging.warning("DWM border fix failed: %s", e)
 
     def _position_window(self):
         """Resize to full screen and set initial cat position."""
