@@ -137,3 +137,10 @@ class CatState:
     blush_alpha: float = 0.0
     blush_target: float = 0.0
     pupil_dilation: float = 0.5
+
+    # ── Toys (chase / play) ──
+    toy_target: tuple | None = None       # (x, y) — current toy position
+    toy_timer: float = 0.0                # countdown for toy lifetime
+    toy_active: bool = False              # toy currently exists on screen
+    toy_type: str | None = None           # "laser" or "ball"
+    chase_timeout: float = 0.0            # countdown: stop chasing if mouse stays still
