@@ -154,6 +154,7 @@ def default_cat_dict(cat_id: int, coat: int = 0,
         "toy_type": None,
         "chase_timeout": 0.0,
         "hut_index": cat_id,
+        "_action_history": [],
     }
 
 

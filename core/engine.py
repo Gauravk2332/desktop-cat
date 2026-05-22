@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import QApplication
 import config
 from core.state import CatState, SPEECH_MOODS, default_cat_dict
 import core.navigation as navigation
+from behavior.agent import CatAgent
 from core.sound import SoundManager
 from core.navigation import _spawn_hearts
 from core.toast import notify
@@ -81,6 +82,9 @@ class Engine:
         self._walk_et.start()
         self._walk_pause_et = QElapsedTimer()
         self._walk_pause_et.start()
+
+        # Agent system (optional — replaces hardcoded state transitions)
+        self._agent = None
 
         # Main tick timer
         self._tick_timer = QTimer(window)
@@ -266,6 +270,12 @@ class Engine:
 
             # 7. Toy system (shared — uses state-level toy tracking)
             self._update_toys(dt)
+
+            # 7b. Agent decision (optional — every ~2s, replaces state transitions)
+            if self._agent is not None and not self._agent.is_using_fallback:
+                for cat in s.cats:
+                    action, params = self._agent.decide(cat, s)
+                    self._execute_agent_action(cat, action, params, dt)
 
             # 8. Toast notifications (per cat)
             self._update_notifications(dt)
@@ -827,6 +837,147 @@ class Engine:
                 cat["coat"] = coat_idx
         except ImportError:
             pass
+
+    # ── Agent system ────────────────────────────────────────────────────
+
+    def set_agent(self, agent: CatAgent) -> None:
+        """Configure the AI cat agent.
+
+        Args:
+            agent: A configured CatAgent instance (ollama or remote backend).
+        """
+        self._agent = agent
+        # Initialize action history on each cat
+        for cat in self.state.cats:
+            cat.setdefault("_action_history", [])
+        logging.info("CatAgent configured (backend=%s model=%s interval=%.1fs)",
+                     agent.backend,
+                     agent.ollama_model if agent.backend == "ollama" else agent.remote_model,
+                     agent.decision_interval)
+
+    def _execute_agent_action(self, cat: dict, action: str,
+                               params, dt: float) -> None:
+        """Translate an agent action into engine state changes.
+
+        Actions the agent can return:
+          SIT, WALK x y, SLEEP, PURR, MEOW type, GROOM, STRETCH,
+          CHASE, FOLLOW, PLAYTOY, HOME, IGNORE, SLOWBLINK, SCRATCH
+        """
+        if action == "NONE" or action == "IGNORE":
+            return
+
+        from config import STATE_SLEEP, STATE_WALK, STATE_WANDER, STATE_CHASE
+        from config import STATE_PLAY, STATE_GO_HOME
+
+        current_state = cat.get("state", "SIT")
+
+        # Track action in history
+        self._record_agent_action(cat, action)
+
+        if action == "SIT":
+            if current_state in (STATE_WALK, STATE_WANDER):
+                cat["state"] = "SIT"
+                cat["walk_duration"] = 0.0
+                cat["walk_elapsed"] = 0.0
+            elif current_state == STATE_CHASE:
+                cat["state"] = "SIT"
+                cat["toy_target"] = None
+                cat["toy_active"] = False
+
+        elif action == "WALK" and params:
+            tx = float(params.get("x", cat.get("x", 500)))
+            ty = float(params.get("y", cat.get("y", 400)))
+            # Clamp to screen
+            s = self.state
+            tx = max(50.0, min(tx, float(s.screen_width - 50)))
+            y_min = s.screen_height * 0.35
+            y_max = s.screen_height - 50
+            ty = max(float(y_min), min(ty, float(y_max)))
+            cat["walk_target_x"] = tx
+            cat["walk_target_y"] = ty
+            cat["walk_duration"] = 3.0
+            cat["walk_elapsed"] = 0.0
+            cat["walk_accel"] = 0.0
+            cat["walk_pause"] = False
+            cat["walk_frame"] = 0
+            cat["walk_accum"] = 0.0
+            cat["walk_vy"] = (ty - cat["y"]) / 120.0
+            cat["facing"] = tx > cat["x"]
+            if current_state not in (STATE_WALK, STATE_WANDER):
+                cat["state"] = STATE_WALK
+
+        elif action == "FOLLOW":
+            cat["state"] = "FOLLOW"
+            cat["walk_duration"] = 2.0
+            cat["walk_elapsed"] = 0.0
+
+        elif action == "HOME" or action == "SLEEP":
+            if current_state != STATE_SLEEP:
+                cat["state"] = STATE_GO_HOME if not cat.get("at_home", False) else STATE_SLEEP
+
+        elif action == "CHASE":
+            if current_state not in (STATE_CHASE,):
+                cat["state"] = STATE_CHASE
+                s = self.state
+                cat["toy_target"] = (float(s.mouse_pos[0]), float(s.mouse_pos[1]))
+                cat["toy_active"] = True
+                cat["chase_timeout"] = 8.0
+
+        elif action == "PLAYTOY":
+            if current_state not in (STATE_PLAY, STATE_CHASE):
+                cat["state"] = STATE_PLAY
+                import random as _r
+                cat["toy_target"] = (
+                    cat["x"] + _r.uniform(-100, 100),
+                    cat["y"] + _r.uniform(-50, 50),
+                )
+                cat["toy_active"] = True
+                cat["toy_type"] = "ball"
+                cat["toy_timer"] = 3.0
+
+        elif action == "PURR":
+            cat["purr_vibrate"] = 1.0
+            if current_state == "SIT":
+                try:
+                    self.sound.play("purr")
+                except Exception:
+                    pass
+
+        elif action == "MEOW":
+            sound_type = params.get("type", "greeting") if params else "greeting"
+            try:
+                self.sound.play(f"meow_{sound_type}")
+            except Exception:
+                try:
+                    self.sound.play("meow_short")
+                except Exception:
+                    pass
+
+        elif action == "GROOM":
+            cat["reaction_type"] = "groom"
+            cat["reaction_timer"] = 2.0
+
+        elif action == "STRETCH":
+            cat["reaction_type"] = "stretch"
+            cat["reaction_timer"] = 1.5
+
+        elif action == "SLOWBLINK":
+            cat["blinking"] = True
+            cat["blink_timer"] = 0.0
+            cat["next_blink"] = 3.0
+
+        elif action == "SCRATCH":
+            cat["reaction_type"] = "scratch"
+            cat["reaction_timer"] = 1.5
+
+    def _record_agent_action(self, cat: dict, action: str) -> None:
+        """Record an agent action for history tracking (stored on cat dict)."""
+        history = cat.get("_action_history", [])
+        history.append(action)
+        # Keep last 10 actions
+        if len(history) > 10:
+            history[:] = history[-10:]
+        cat["_action_history"] = history
 
     def _clamp_needs(self) -> None:
         for cat in self.state.cats:
