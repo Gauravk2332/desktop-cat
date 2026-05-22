@@ -125,9 +125,15 @@ def compare(state_name: str, threshold: float = 0.02) -> dict:
 
     # Compute difference percentage
     pixels = img1.size[0] * img1.size[1]
-    diff_pixels = sum(1 for x in range(img1.size[0]) for y in range(img1.size[1])
-                      if diff.getpixel((x, y)) != (0, 0, 0, 0) if len(diff.getpixel((x, y))) == 4
-                      else sum(diff.getpixel((x, y))[:3]) > 0)
+    diff_pixels = 0
+    for x in range(img1.size[0]):
+        for y in range(img1.size[1]):
+            px = diff.getpixel((x, y))
+            if len(px) == 4:
+                if px != (0, 0, 0, 0):
+                    diff_pixels += 1
+            elif sum(px[:3]) > 0:
+                diff_pixels += 1
     diff_pct = (diff_pixels / pixels) * 100
 
     # Save diff image
