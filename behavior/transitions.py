@@ -59,8 +59,8 @@ def _update_sit(dt: float, state) -> None:
         state.at_home = False
         state.home_cooldown = config.HOME_VISIT_COOLDOWN
 
-    # 1. Energy low → GO_HOME
-    if state.energy < config.HOME_ENERGY_THRESHOLD:
+    # 1. Energy low → GO_HOME (but not if already at home)
+    if state.energy < config.HOME_ENERGY_THRESHOLD and not state.at_home:
         _enter_go_home(state)
         return
 
