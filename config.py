@@ -54,17 +54,20 @@ STATE_PATH = os.path.join(STATE_DIR, "state.json")
 # ─── HTTP API ─────────────────────────────────────────────────────────────
 API_PORT = 18789
 
-# ─── Home / Bed (screen-relative) ─────────────────────────────────────────
-HOME_BED_RX    = 37    # bed outer ellipse rx
-HOME_BED_RY    = 27    # bed outer ellipse ry
-HOME_BED_INNER = 0.62  # inner depression ratio (0-1)
-HOME_PADDING_RIGHT = 20   # px from screen's RIGHT edge
-HOME_PADDING_BOTTOM = 48  # px from screen's BOTTOM edge
+# ─── Hut / Home (screen-relative) ─────────────────────────────────────────
+HUT_WIDTH     = 60    # total hut width in px
+HUT_HEIGHT    = 55    # total hut height in px
+HUT_ROOF_OVERHANG = 6   # roof extends past walls
+HUT_DOOR_W    = 22    # door opening width
+HUT_DOOR_H    = 30    # door opening height
+HUT_DOOR_FLOOR = 6    # floor/threshold height below door
+HUT_PADDING_RIGHT = 20
+HUT_PADDING_BOTTOM = 48
 HOME_TOLERANCE = 2.0    # px near-enough when arriving
 
 HOME_ENERGY_THRESHOLD  = 40.0  # energy below this → go home
 HOME_NAP_MIN_ENERGY    = 60.0  # wake from home nap when energy reaches this
-HOME_LINGER_DURATION   = 8.0   # seconds to sit near bed after waking
+HOME_LINGER_DURATION   = 8.0   # seconds to sit near hut after waking
 HOME_VISIT_COOLDOWN    = 90.0  # min seconds between home visits
 HOME_BOREDOM_THRESHOLD = 70.0  # boredom above this → go home nap
 
@@ -84,10 +87,11 @@ C_PUPIL      = QColor(0x1A, 0x1A, 0x1A)  # near-black
 C_CLOSED_EYE = QColor(0x5C, 0x4A, 0x3D)  # warm brown for closed-eye arc
 C_BLUSH      = QColor(0xFF, 0xCD, 0xD2, 100)
 
-# Home / Bed
-C_BED_RIM   = QColor(0xD4, 0xA5, 0x74)
-C_BED_INNER = QColor(0xC4, 0x9A, 0x6C)
-C_BED_ACCENT = QColor(0xE8, 0xD5, 0xC0)
+# Hut
+HUT_INTERIOR_COLOR = QColor(0x1A, 0x1A, 0x1A, 200)  # dark
+HUT_WALL_COLOR = QColor(0xD4, 0xA5, 0x74)         # warm wood brown
+HUT_ROOF_COLOR = QColor(0xB8, 0x7A, 0x4A)          # darker brown
+HUT_ACCENT_COLOR = QColor(0xE8, 0xD5, 0xC0)        # light trim
 C_Z_BADGE   = QColor(0xCC, 0xCC, 0xCC, 200)
 
 # Effects

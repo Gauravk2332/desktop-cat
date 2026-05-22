@@ -49,8 +49,8 @@ class TestConfigSanity(unittest.TestCase):
         self.assertGreaterEqual(config.WANDER_COOLDOWN, 1.0)
 
     def test_home_padding_positive(self):
-        self.assertGreater(config.HOME_PADDING_RIGHT, 0)
-        self.assertGreater(config.HOME_PADDING_BOTTOM, 0)
+        self.assertGreater(config.HUT_PADDING_RIGHT, 0)
+        self.assertGreater(config.HUT_PADDING_BOTTOM, 0)
 
 
 class TestStateTransitions(unittest.TestCase):
@@ -386,13 +386,13 @@ class TestNavigation(unittest.TestCase):
         navigation.update_go_home(0.05, self.state)
         self.assertGreater(self.state.cat_x, before)  # moving right toward bed
 
-    def test_go_home_arrives_at_bed(self):
-        """GO_HOME should set SLEEP when approaching bed center."""
+    def test_go_home_arrives_at_hut(self):
+        """GO_HOME should set SLEEP when approaching hut door center."""
         from core import navigation
-        from cat.home import _bed_center
-        bed_x, bed_y = _bed_center(self.state)
+        from cat.home import _hut_door_center
+        hx, hy = _hut_door_center(self.state)
         self.state.state = config.STATE_GO_HOME
-        self.state.cat_x = bed_x - 1.0  # close enough
+        self.state.cat_x = hx - 1.0  # close enough
         navigation.update_go_home(0.05, self.state)
         self.assertEqual(self.state.state, config.STATE_SLEEP)
         self.assertTrue(self.state.at_home)
@@ -478,34 +478,34 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(self.state.reaction_type, "purr")
 
 
-class TestBedCoordinates(unittest.TestCase):
-    """Test bed coordinate calculations."""
+class TestHutCoordinates(unittest.TestCase):
+    """Test hut door center coordinate calculations."""
 
     def setUp(self):
         self.state = CatState()
         self.state.screen_width = 1920
         self.state.screen_height = 1080
 
-    def test_bed_center_bottom_right(self):
-        """Bed center should be at bottom-right of screen."""
-        from cat.home import _bed_center
-        bx, by = _bed_center(self.state)
+    def test_hut_door_center_bottom_right(self):
+        """Hut door center should be at bottom-right of screen."""
+        from cat.home import _hut_door_center
+        hx, hy = _hut_door_center(self.state)
         # Bottom-right minus padding
-        expected_x = self.state.screen_width - config.HOME_PADDING_RIGHT - config.HOME_BED_RX
-        expected_y = self.state.screen_height - config.HOME_PADDING_BOTTOM - config.HOME_BED_RY
-        self.assertAlmostEqual(bx, expected_x, delta=1)
-        self.assertAlmostEqual(by, expected_y, delta=1)
+        expected_x = self.state.screen_width - config.HUT_PADDING_RIGHT - config.HUT_WIDTH // 2
+        expected_y = self.state.screen_height - config.HUT_PADDING_BOTTOM - config.HUT_DOOR_FLOOR
+        self.assertAlmostEqual(hx, expected_x, delta=1)
+        self.assertAlmostEqual(hy, expected_y, delta=1)
 
-    def test_bed_center_scales_with_screen(self):
-        """Bed position should scale with screen size."""
-        from cat.home import _bed_center
+    def test_hut_door_center_scales_with_screen(self):
+        """Hut door position should scale with screen size."""
+        from cat.home import _hut_door_center
         self.state.screen_width = 1366
         self.state.screen_height = 768
-        bx, by = _bed_center(self.state)
-        expected_x = 1366 - config.HOME_PADDING_RIGHT - config.HOME_BED_RX
-        expected_y = 768 - config.HOME_PADDING_BOTTOM - config.HOME_BED_RY
-        self.assertAlmostEqual(bx, expected_x, delta=1)
-        self.assertAlmostEqual(by, expected_y, delta=1)
+        hx, hy = _hut_door_center(self.state)
+        expected_x = 1366 - config.HUT_PADDING_RIGHT - config.HUT_WIDTH // 2
+        expected_y = 768 - config.HUT_PADDING_BOTTOM - config.HUT_DOOR_FLOOR
+        self.assertAlmostEqual(hx, expected_x, delta=1)
+        self.assertAlmostEqual(hy, expected_y, delta=1)
 
 
 if __name__ == "__main__":

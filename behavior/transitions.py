@@ -114,9 +114,9 @@ def _update_go_home(dt: float, state) -> None:
 
 
 def _enter_go_home(state) -> None:
-    """Start walking toward the home bed (bottom-right of screen)."""
-    from cat.home import _bed_center
-    bed_x, bed_y = _bed_center(state)
+    """Start walking toward the home hut (bottom-right of screen)."""
+    from cat.home import _hut_door_center
+    hx, hy = _hut_door_center(state)
     state.facing = True  # home is to the right
     state.state = config.STATE_GO_HOME
     state.walk_elapsed = 0.0

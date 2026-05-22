@@ -97,13 +97,13 @@ def update_wander(dt: float, state) -> None:
 
 def update_go_home(dt: float, state) -> None:
     """Update go-home navigation. Extracted from Engine._update_go_home."""
-    from cat.home import _bed_center
-    bed_x, bed_y = _bed_center(state)
-    remaining = bed_x - state.cat_x
+    from cat.home import _hut_door_center
+    hx, hy = _hut_door_center(state)
+    remaining = hx - state.cat_x
 
     if remaining <= config.HOME_TOLERANCE:
         # Arrived at home
-        state.cat_x = bed_x
+        state.cat_x = hx
         state.at_home = True
         state.state = config.STATE_SLEEP
         state.sleep_breath = 0.0

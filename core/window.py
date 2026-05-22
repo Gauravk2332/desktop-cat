@@ -16,7 +16,7 @@ from PyQt6.QtGui import QPainter, QPainterPath, QColor, QPen, QFont
 import config
 from core.state import CatState
 from cat import body, tail, legs, head, eyes
-from cat.home import draw_bed, draw_sleeping_cat
+from cat.home import draw_hut_frame, draw_hut_front, draw_sleeping_cat
 
 
 class CatWindow(QWidget):
@@ -74,15 +74,19 @@ class CatWindow(QWidget):
             if self.state.state == config.STATE_SLEEP and self.state.deep_sleep:
                 painter.setOpacity(0.6)
 
-            # Background: always draw the home bed cushion at bottom-right
-            draw_bed(painter, self.state)
+            # 1. Draw hut base + interior (always, replaces old bed)
+            draw_hut_frame(painter, self.state)
 
-            # Dispatch by state
+            # 2. Draw cat inside hut if sleeping at home
+            if self.state.state == config.STATE_SLEEP and self.state.at_home:
+                draw_sleeping_cat(painter, self.state)
+
+            # 3. Draw hut front (roof, walls overlaying cat)
+            draw_hut_front(painter, self.state)
+
+            # Dispatch by state (field sleep, walk, sit)
             if self.state.state == config.STATE_SLEEP:
-                if self.state.at_home:
-                    # Sleeping ON the bed — drawn by home module
-                    draw_sleeping_cat(painter, self.state)
-                else:
+                if not self.state.at_home:
                     # Field sleep — drawn by window
                     self._draw_sleep(painter, cx, cy)
             elif self.state.state == config.STATE_WALK or self.state.state == config.STATE_WANDER:
