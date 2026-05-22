@@ -1,0 +1,53 @@
+{
+  "frame_size": [
+    542,
+    474
+  ],
+  "animations": {
+    "sit_alert": {
+      "path": "sit_alert.png",
+      "frames": 10,
+      "type": "loop"
+    },
+    "walk": {
+      "path": "walk.png",
+      "frames": 10,
+      "type": "loop"
+    },
+    "trot": {
+      "path": "trot.png",
+      "frames": 8,
+      "type": "loop"
+    },
+    "jump": {
+      "path": "jump.png",
+      "frames": 8,
+      "type": "loop"
+    },
+    "fall": {
+      "path": "fall.png",
+      "frames": 8,
+      "type": "loop"
+    },
+    "slide": {
+      "path": "slide.png",
+      "frames": 10,
+      "type": "loop"
+    },
+    "hurt": {
+      "path": "hurt.png",
+      "frames": 10,
+      "type": "loop"
+    },
+    "dead": {
+      "path": "dead.png",
+      "frames": 10,
+      "type": "once"
+    },
+    "sleep_curled": {
+      "path": "sleep_curled.png",
+      "frames": 10,
+      "type": "loop"
+    }
+  }
+}
