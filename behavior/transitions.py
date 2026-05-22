@@ -117,7 +117,6 @@ def _enter_go_home(state) -> None:
     """Start walking toward the home hut (bottom-right of screen)."""
     from cat.home import _hut_door_center
     hx, hy = _hut_door_center(state)
-    state.facing = True  # home is to the right
     state.state = config.STATE_GO_HOME
     state.walk_elapsed = 0.0
     state.walk_frame = 0
@@ -133,9 +132,12 @@ def _enter_sleep(state) -> None:
 
 
 def _enter_wander(state) -> None:
-    """Start wandering — walk in a random direction."""
-    # Pick a random direction
-    state.facing = random.choice([True, False])
+    """Start wandering — walk in a random 2D direction."""
+    import math as _math
+    angle = _math.radians(random.randint(0, 360))
+    state.wander_vx = _math.cos(angle)
+    state.wander_vy = _math.sin(angle)
+    state.facing = state.wander_vx > 0
     state.state = config.STATE_WANDER
     state.wander_duration = random.uniform(config.WANDER_DURATION_MIN, config.WANDER_DURATION_MAX)
     state.wander_elapsed = 0.0
