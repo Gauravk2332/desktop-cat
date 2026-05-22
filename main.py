@@ -70,19 +70,33 @@ def main():
         logger.critical("Engine creation failed: %s", exc_info=True)
         sys.exit(1)
 
-    # 4. Pass state and engine reference to API
+    # 4. Create AI cat agent
+    try:
+        from behavior.agent import CatAgent
+        agent = CatAgent(
+            backend="ollama",
+            ollama_model="llama3.2:1b",
+            decision_interval=2.0,
+        )
+        engine.set_agent(agent)
+        logger.info("CatAgent created (ollama / llama3.2:1b)")
+    except Exception as e:
+        logger.warning("CatAgent creation failed (non-fatal): %s", e)
+        logger.info("Cat running without AI agent (fallback mode)")
+
+    # 5. Pass state and engine reference to API
     from core.api import set_state_ref, set_engine_ref
     set_state_ref(state)
     set_engine_ref(engine)
 
-    # 5. Start HTTP API daemon
+    # 6. Start HTTP API daemon
     try:
         start_api()
         logger.info("API started on port %d", config.API_PORT)
     except Exception as e:
         logger.warning("API failed to start: %s", e)
 
-    # 6. System tray
+    # 7. System tray
     try:
         from ui.tray import CatTrayIcon
         tray = CatTrayIcon(app, state, window)
@@ -92,7 +106,7 @@ def main():
     except Exception as e:
         logger.warning("Tray failed to load (non-fatal): %s", e)
 
-    # 7. Enter event loop
+    # 8. Enter event loop
     try:
         exit_code = app.exec()
         logger.info("Event loop exited with code %d", exit_code)
@@ -100,7 +114,7 @@ def main():
         logger.critical("Event loop crashed: %s", exc_info=True)
         exit_code = 1
 
-    # 8. Save state on clean exit
+    # 9. Save state on clean exit
     try:
         engine.save_state()
         logger.info("State saved on exit")
