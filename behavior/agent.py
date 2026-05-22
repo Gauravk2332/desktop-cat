@@ -18,6 +18,7 @@ import json
 import logging
 import math
 import random
+import threading
 import time
 from typing import Optional
 
@@ -303,8 +304,14 @@ def rule_based_action(cat: dict, state) -> tuple:
 
 # ─── CatAgent Class ──────────────────────────────────────────────────
 
+# ─── Non-Blocking Agent ────────────────────────────────────────────────
+
 class CatAgent:
     """Decision-maker for a single cat, using LLM or fallback rules.
+
+    **Non-blocking:** LLM calls run in a background thread so the frame
+    loop is never blocked. If the thread is still running when a decision
+    is requested, the last known action is returned immediately.
 
     Usage:
         agent = CatAgent(backend="ollama")
@@ -322,6 +329,7 @@ class CatAgent:
         remote_model: str = "",
         decision_interval: float = 2.0,
         max_failures: int = 3,
+        llm_timeout: float = 10.0,
     ):
         self.backend = backend
         self.ollama_host = ollama_host
@@ -330,6 +338,7 @@ class CatAgent:
         self.remote_api_key = remote_api_key
         self.remote_model = remote_model
         self.decision_interval = decision_interval
+        self.llm_timeout = llm_timeout
 
         self._last_decision = 0.0
         self._last_action = ("SIT", None)
@@ -337,46 +346,86 @@ class CatAgent:
         self._max_failures_before_fallback = max_failures
         self._use_fallback = False
 
+        # Background thread state
+        self._thread = None
+        self._thread_context = ""
+        self._thread_result: Optional[str] = None  # None = not done
+        self._thread_lock = threading.Lock()
+        self._last_cat_in_sight = 0.0  # cats are fast, but not this fast
+
         logger.info("CatAgent initialized: backend=%s model=%s interval=%.1fs",
                      backend, ollama_model if backend == "ollama" else remote_model,
                      decision_interval)
 
+    def _start_decision_thread(self, context: str):
+        """Start a background thread for the LLM call."""
+        def _worker():
+            response = None
+            if self.backend == "ollama":
+                response = call_ollama(context, self.ollama_host,
+                                       self.ollama_model, self.llm_timeout)
+            elif self.backend == "remote":
+                response = call_remote_api(context, self.remote_api_url,
+                                           self.remote_api_key, self.remote_model,
+                                           self.llm_timeout)
+            with self._thread_lock:
+                self._thread_result = response
+
+        self._thread = threading.Thread(target=_worker, daemon=True)
+        self._thread.start()
+
     def decide(self, cat: dict, state) -> tuple:
-        """Decide what action to take. Returns (action_type, params)."""
+        """Decide what action to take. Never blocks.
+
+        Returns (action_type, params) — either a new decision from the
+        background thread or the previous action.
+        """
         now = time.time()
 
-        # Not time for a new decision yet
+        # 1. Check if background thread finished
+        if self._thread is not None:
+            with self._thread_lock:
+                if self._thread_result is not None:
+                    response = self._thread_result
+                    self._thread_result = None
+                    self._thread = None
+
+                    # Process LLM result
+                    if response:
+                        self._consecutive_failures = 0
+                        self._use_fallback = False
+                        action, params = parse_action(response)
+                        self._last_action = (action, params)
+                        return (action, params)
+                    else:
+                        # LLM call failed
+                        self._consecutive_failures += 1
+                        if self._consecutive_failures >= self._max_failures_before_fallback:
+                            self._use_fallback = True
+                            logger.info("Agent: falling back to rule-based (LLM unavailable)")
+                        fallback = rule_based_action(cat, state)
+                        self._last_action = fallback
+                        return fallback
+
+            # Thread still running — return last action
+            return self._last_action
+
+        # 2. Not time for a new decision yet
         if now - self._last_decision < self.decision_interval:
             return self._last_action
 
         self._last_decision = now
 
-        # Build context
-        context = build_context(cat, state)
-
-        # Try LLM
-        response = None
-        if not self._use_fallback:
-            if self.backend == "ollama":
-                response = call_ollama(context, self.ollama_host, self.ollama_model)
-            elif self.backend == "remote":
-                response = call_remote_api(
-                    context, self.remote_api_url, self.remote_api_key, self.remote_model
-                )
-
-        if response:
-            self._consecutive_failures = 0
-            self._use_fallback = False
-            action, params = parse_action(response)
-        else:
-            self._consecutive_failures += 1
-            if self._consecutive_failures >= self._max_failures_before_fallback:
-                self._use_fallback = True
-                logger.info("Agent: falling back to rule-based (LLM unavailable)")
+        # 3. Fallback mode — use rules (instant, no thread)
+        if self._use_fallback:
             action, params = rule_based_action(cat, state)
+            self._last_action = (action, params)
+            return (action, params)
 
-        self._last_action = (action, params)
-        return (action, params)
+        # 4. Start background LLM call, return current action immediately
+        context = build_context(cat, state)
+        self._start_decision_thread(context)
+        return self._last_action
 
     @property
     def is_using_fallback(self) -> bool:
