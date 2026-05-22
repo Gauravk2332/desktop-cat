@@ -224,7 +224,7 @@ def test_renderer_backend_config():
     assert config.CROSSFADE_MS == 200, \
         f"CROSSFADE_MS = {config.CROSSFADE_MS}, expected 200"
     assert config.SPRITE_SIZE == 400
-    assert config.CAT_SIZE_DEFAULT == 200
+    assert config.CAT_SIZE_DEFAULT == 120
     assert config.CAT_SIZE_MIN == 120
     assert config.CAT_SIZE_MAX == 350
     assert config.SHADOW_OPACITY == 0.10
