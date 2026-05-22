@@ -7,6 +7,39 @@ Pure data. Zero logic. Shared by reference across all modules.
 from dataclasses import dataclass, field
 
 
+# ── Speech bubble mood pools ──
+SPEECH_MOODS = {
+    "bored": {
+        "texts": ["zzz...", "yawwwn", "pet me?", "so bored..."],
+        "emoji": "💤",
+    },
+    "happy": {
+        "texts": ["purrrr~", "nyaa~", "😊", "hehe"],
+        "emoji": "😊",
+    },
+    "hungry": {
+        "texts": ["feed me.", "hungry...", "🍣", "snack?"],
+        "emoji": "🍣",
+    },
+    "alert": {
+        "texts": ["!?", "who's there?", "👀", "hm?"],
+        "emoji": "👀",
+    },
+    "sleepy": {
+        "texts": ["💤", "zzz...", "don't wanna", "sleepy..."],
+        "emoji": "💤",
+    },
+    "playful": {
+        "texts": ["pounce!", "hehe", "🎯", "again!", "c'mere!"],
+        "emoji": "🎯",
+    },
+    "long-idle": {
+        "texts": ["hello?", "still there?", "👋", "miss me?"],
+        "emoji": "👋",
+    },
+}
+
+
 @dataclass
 class CatState:
     # ── Vital needs (0-100) ──
@@ -70,6 +103,18 @@ class CatState:
     mouse_pos: tuple = (0.0, 0.0)
     mouse_near: bool = False
     last_interaction: float = 0.0
+
+    # ── Speech bubble ──
+    speech: dict = field(default_factory=lambda: {
+        "text": None,
+        "emoji": None,
+        "timer": 0.0,
+        "fading": False,
+        "opacity": 0.0,
+        "queue": [],
+    })
+    speech_cooldown: float = 0.0
+    speech_idle_timer: float = 0.0
 
     # ── Click-through state (toggled by Controls) ──
     click_through: bool = True

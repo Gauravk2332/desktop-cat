@@ -115,6 +115,32 @@ EYE_R         = 4
 PUPIL_R       = 2.5
 WHISKER_LEN   = 12
 
+# ─── Speech Bubble ──────────────────────────────────────────────────────────
+SPEECH_BUBBLE_W = 140
+SPEECH_CELL_TOP_H = 30
+SPEECH_CELL_BOT_H = 20
+SPEECH_ABOVE_GAP = 20
+SPEECH_BELOW_GAP = 50
+SPEECH_FADE_IN = 0.3       # seconds
+SPEECH_DISPLAY = 3.0       # base seconds
+SPEECH_FADE_OUT = 0.5      # seconds
+SPEECH_MAX_CHARS = 15
+SPEECH_QUEUE_MAX = 5       # max queued messages
+SPEECH_IDLE_COOLDOWN = 60  # seconds between idle bubbles
+SPEECH_IDLE_THRESHOLD = 120  # seconds idle before "hello?"
+SPEECH_PROXIMITY_RADIUS = 60  # px
+SPEECH_PROXIMITY_COOLDOWN = 15  # seconds
+
+MOOD_PRIORITY = {
+    "hungry": 3,
+    "alert": 3,
+    "playful": 2,
+    "happy": 2,
+    "bored": 1,
+    "sleepy": 0,
+    "long-idle": 1,
+}
+
 # ─── Expression Targets ───────────────────────────────────────────────────
 EXPR_NEUTRAL  = {"ew": 4, "eh": 4, "pw": 2.5, "ph": 2.5, "px": 0, "py": 0}
 EXPR_HAPPY     = {"ew": 5, "eh": 3,  "pw": 3,   "ph": 2,  "px": 0, "py": 1}

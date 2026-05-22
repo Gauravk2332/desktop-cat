@@ -273,6 +273,92 @@ def draw_hearts(painter, state) -> None:
         painter.drawPath(heart_path)
 
 
+_SPEECH_BUBBLE_COLOR = QColor(42, 42, 42, 200)
+_SPEECH_TEXT_COLOR = QColor(224, 224, 224)
+_SPEECH_DIVIDER_COLOR = QPen(QColor(60, 60, 60, 200), 1)
+
+
+def draw_speech_bubble(painter, state, cat_x: float, cat_y: float,
+                        facing_right: bool) -> None:
+    """Draw speech bubble above cat with emoji + text.
+    Uses state.speech dict. No-op when speech.text is None.
+    """
+    s = state.speech
+    if s["text"] is None:
+        return
+
+    from PyQt6.QtCore import QPointF, QRectF
+    from PyQt6.QtGui import QPainterPath, QFont, QPolygonF
+
+    painter.save()
+    painter.setOpacity(s["opacity"])
+
+    bubble_w = config.SPEECH_BUBBLE_W
+    top_h = config.SPEECH_CELL_TOP_H
+    bot_h = config.SPEECH_CELL_BOT_H
+    total_h = top_h + bot_h
+
+    # Position: above cat head
+    bx = int(cat_x - bubble_w // 2)
+    by = int(cat_y - total_h - config.SPEECH_ABOVE_GAP)
+
+    # Flip below cat if near top of screen
+    flipped = False
+    if by < 5:
+        by = int(cat_y + config.SPEECH_BELOW_GAP)
+        flipped = True
+
+    # Clamp to screen edges
+    bx = max(5, min(bx, state.screen_width - bubble_w - 5))
+
+    # Bubble background
+    bg = QPainterPath()
+    bg.addRoundedRect(bx, by, bubble_w, total_h, 4, 4)
+    painter.fillPath(bg, _SPEECH_BUBBLE_COLOR)
+
+    # Divider line
+    painter.setPen(_SPEECH_DIVIDER_COLOR)
+    painter.drawLine(bx + 4, by + top_h, bx + bubble_w - 4, by + top_h)
+
+    # Emoji (top cell)
+    if s["emoji"] is not None:
+        painter.setPen(_SPEECH_TEXT_COLOR)
+        painter.setFont(QFont("Segoe UI", 12))
+        emoji_rect = QRectF(bx, by, bubble_w, top_h)
+        painter.drawText(emoji_rect, Qt.AlignmentFlag.AlignCenter, s["emoji"])
+
+    # Text (bottom cell)
+    if s["text"]:
+        painter.setPen(_SPEECH_TEXT_COLOR)
+        painter.setFont(QFont("Segoe UI", 10))
+        text_rect = QRectF(bx, by + top_h, bubble_w, bot_h)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, s["text"])
+
+    # Tail triangle
+    tail_center_x = bx + bubble_w // 2
+    tail_top_y = by + total_h
+    tail_bottom_y = tail_top_y + 8
+
+    if flipped:
+        tail_pts = QPolygonF([
+            QPointF(tail_center_x, tail_top_y),
+            QPointF(tail_center_x - 5, tail_bottom_y),
+            QPointF(tail_center_x + 5, tail_bottom_y),
+        ])
+    else:
+        tail_pts = QPolygonF([
+            QPointF(tail_center_x, tail_bottom_y),
+            QPointF(tail_center_x - 5, tail_top_y),
+            QPointF(tail_center_x + 5, tail_top_y),
+        ])
+
+    painter.setBrush(_SPEECH_BUBBLE_COLOR)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawPolygon(tail_pts)
+
+    painter.restore()
+
+
 def _draw_z_badge(painter, hx: int, hy: int, state) -> None:
     """Draw floating Z badge above the hut roof when sleeping."""
     dh = config.HUT_DOOR_H // 2

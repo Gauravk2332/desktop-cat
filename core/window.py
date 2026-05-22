@@ -24,7 +24,7 @@ from PyQt6.QtGui import QPainter, QPainterPath, QColor, QPen, QFont
 import config
 from core.state import CatState
 from cat import body, tail, legs, head, eyes
-from cat.home import draw_hut_frame, draw_hut_front, draw_sleeping_cat, draw_hearts
+from cat.home import draw_hut_frame, draw_hut_front, draw_sleeping_cat, draw_hearts, draw_speech_bubble
 from core.controls import Controls
 
 
@@ -161,7 +161,10 @@ class CatWindow(QWidget):
             # 4. Draw floating hearts (on pet)
             draw_hearts(painter, self.state)
 
-            # 5. Interact mode indicator
+            # 5. Draw speech bubble (above cat)
+            draw_speech_bubble(painter, self.state, cx, cy, self.state.facing)
+
+            # 6. Interact mode indicator
             if not self.state.click_through:
                 self._draw_interact_indicator(painter)
 

@@ -23,7 +23,7 @@ from PyQt6.QtGui import QScreen, QCursor
 from PyQt6.QtWidgets import QApplication
 
 import config
-from core.state import CatState
+from core.state import CatState, SPEECH_MOODS
 import core.navigation as navigation
 from core.sound import SoundManager
 from core.navigation import _spawn_hearts
@@ -69,6 +69,11 @@ class Engine:
         self._mouse_timer = QTimer(window)
         self._mouse_timer.timeout.connect(self._check_mouse)
         self._mouse_timer.start(200)
+
+        # Speech state transition tracking
+        self._prev_speech_state = state.state
+        self._prev_hunger = state.hunger
+        self._speech_proximity_triggered = False
 
         # System-wide idle detection (slow — ctypes call)
         self._idle_timer = QTimer(window)
@@ -144,8 +149,17 @@ class Engine:
             # 3. Internal animation updates
             self._update_animations(dt)
 
-            # 3. Process external action queue
+            # 3. Process external action queue (pet/feed/wake actions)
+            self._prev_hunger = s.hunger
             self._process_actions()
+
+            # 3a. Speech trigger on feed action (hunger dropped)
+            if s.hunger < self._prev_hunger - 1.0 and s.speech_cooldown <= 0:
+                self._trigger_speech("happy")
+                s.speech_cooldown = 5.0
+
+            # 3b. Speech bubble tick
+            self._update_speech(dt)
 
             # 4. Clamp needs
             self._clamp_needs()
@@ -287,6 +301,120 @@ class Engine:
     def _update_go_home(self, dt: float) -> None:
         navigation.update_go_home(dt, self.state)
 
+    # ── Speech bubble system ────────────────────────────────────────
+
+    def _trigger_speech(self, mood: str) -> None:
+        """Queue or display a speech bubble for the given mood/pool.
+        Handles priority-based interruption vs queuing.
+        """
+        s = self.state
+        mood_data = SPEECH_MOODS.get(mood)
+        if not mood_data:
+            return
+
+        text = random.choice(mood_data["texts"])
+        emoji = mood_data["emoji"]
+
+        new_priority = config.MOOD_PRIORITY.get(mood, 1)
+        speech = s.speech
+
+        if speech["text"] is None:
+            # Nothing showing — display immediately
+            speech["text"] = text
+            speech["emoji"] = emoji
+            speech["timer"] = config.SPEECH_DISPLAY
+            speech["fading"] = False
+            speech["opacity"] = 0.0  # fade in
+        else:
+            # Determine current mood priority
+            current_mood = None
+            for m, md in SPEECH_MOODS.items():
+                if md["emoji"] == speech.get("emoji"):
+                    current_mood = m
+                    break
+            current_priority = config.MOOD_PRIORITY.get(current_mood, 1)
+
+            if new_priority >= current_priority:
+                # Higher/same priority — queue
+                if len(speech["queue"]) < config.SPEECH_QUEUE_MAX:
+                    speech["queue"].append({
+                        "text": text, "emoji": emoji,
+                        "duration": config.SPEECH_DISPLAY
+                    })
+            # else: lower priority — drop
+
+    def _update_speech(self, dt: float) -> None:
+        """Tick the speech bubble system each frame."""
+        s = self.state
+        speech = s.speech
+
+        # Advance cooldown
+        if s.speech_cooldown > 0:
+            s.speech_cooldown -= dt
+            if s.speech_cooldown < 0:
+                s.speech_cooldown = 0.0
+
+        # Idle timer
+        if s.state != config.STATE_SLEEP:
+            s.speech_idle_timer += dt
+        else:
+            s.speech_idle_timer = 0.0
+
+        # Periodic idle bubble check
+        if (s.speech_idle_timer > config.SPEECH_IDLE_THRESHOLD
+                and s.speech_cooldown <= 0
+                and speech["text"] is None):
+            self._trigger_speech("long-idle")
+            s.speech_cooldown = config.SPEECH_IDLE_COOLDOWN
+
+        # State transition check
+        if s.state != self._prev_speech_state:
+            self._prev_speech_state = s.state
+            mood_map = {
+                config.STATE_SIT: "bored",
+                config.STATE_WALK: "playful",
+                config.STATE_WANDER: "playful",
+                config.STATE_SLEEP: "sleepy",
+                config.STATE_GO_HOME: "sleepy",
+            }
+            mood = mood_map.get(s.state)
+            if mood and s.speech_cooldown <= 0:
+                self._trigger_speech(mood)
+                s.speech_cooldown = 3.0
+
+        # No active speech — drain queue
+        if speech["text"] is None and speech["queue"]:
+            next_msg = speech["queue"].pop(0)
+            speech["text"] = next_msg["text"]
+            speech["emoji"] = next_msg["emoji"]
+            speech["timer"] = next_msg["duration"] + config.SPEECH_FADE_IN
+            speech["fading"] = False
+            speech["opacity"] = 0.0
+
+        # Active speech lifecycle
+        if speech["text"] is not None:
+            speech["timer"] -= dt
+
+            # Fade-in phase (first SPEECH_FADE_IN seconds)
+            if not speech["fading"] and speech["opacity"] < 1.0:
+                speech["opacity"] = min(1.0, speech["opacity"] + dt / config.SPEECH_FADE_IN)
+
+            # Enter fade-out when timer drops to SPEECH_FADE_OUT
+            if speech["timer"] <= config.SPEECH_FADE_OUT and not speech["fading"]:
+                speech["fading"] = True
+
+            # Fade-out phase
+            if speech["fading"] and speech["opacity"] > 0.0:
+                speech["opacity"] = max(0.0, speech["opacity"] - dt / config.SPEECH_FADE_OUT)
+
+            # Fully done
+            if speech["timer"] <= 0 and speech["opacity"] <= 0:
+                speech["text"] = None
+                speech["emoji"] = None
+                speech["timer"] = 0.0
+                speech["fading"] = False
+                speech["opacity"] = 0.0
+
     # ── Mouse tracking ──────────────────────────────────────────────
 
     def _check_mouse(self) -> None:
@@ -332,6 +460,18 @@ class Engine:
                     s.consecutive_pets += 1
                 # Spawn hearts on pet
                 _spawn_hearts(s)
+                # Speech: happy on pet
+                if s.speech_cooldown <= 0:
+                    self._trigger_speech("happy")
+                    s.speech_cooldown = config.SPEECH_PROXIMITY_COOLDOWN
+
+        # Proximity speech trigger (mouse nearby, not close enough to pet)
+        if (dist < config.SPEECH_PROXIMITY_RADIUS and dist >= 40
+                and s.state != config.STATE_SLEEP
+                and s.speech["text"] is None
+                and s.speech_cooldown <= 0):
+            self._trigger_speech("alert")
+            s.speech_cooldown = config.SPEECH_PROXIMITY_COOLDOWN
 
         # Approach walk (mouse within 80px)
         if dist < 80 and s.state == config.STATE_SIT:
