@@ -148,12 +148,12 @@ class CatWindow(QWidget):
             # 3. Draw hut front (roof, walls overlaying cat)
             draw_hut_front(painter, self.state)
 
-            # Dispatch by state (field sleep, walk, sit)
+            # Dispatch by state (field sleep, walk, sit, chase, play)
             if self.state.state == config.STATE_SLEEP:
                 if not self.state.at_home:
                     # Field sleep — drawn by window
                     self._draw_sleep(painter, cx, cy)
-            elif self.state.state == config.STATE_WALK or self.state.state == config.STATE_WANDER:
+            elif self.state.state in (config.STATE_WALK, config.STATE_WANDER, config.STATE_CHASE, config.STATE_PLAY):
                 self._draw_walk(painter, cx, cy)
             else:  # STATE_SIT
                 self._draw_sit(painter, cx, cy)
@@ -161,10 +161,13 @@ class CatWindow(QWidget):
             # 4. Draw floating hearts (on pet)
             draw_hearts(painter, self.state)
 
-            # 5. Draw speech bubble (above cat)
+            # 5. Draw interactive toy (laser dot / yarn ball)
+            self._draw_toys(painter)
+
+            # 6. Draw speech bubble (above cat)
             draw_speech_bubble(painter, self.state, cx, cy, self.state.facing)
 
-            # 6. Interact mode indicator
+            # 7. Interact mode indicator
             if not self.state.click_through:
                 self._draw_interact_indicator(painter)
 
@@ -292,3 +295,35 @@ class CatWindow(QWidget):
             painter.fillPath(z, config.C_ZZZ)
 
         painter.restore()
+
+    # ── Toy drawing (laser dot / yarn ball) ──────────────────────
+
+    def _draw_toys(self, painter):
+        """Draw the laser pointer dot or yarn ball toy."""
+        s = self.state
+        if not s.toy_active or s.toy_target is None:
+            return
+
+        tx, ty = s.toy_target
+
+        if s.toy_type == "laser":
+            # Small red dot at cursor position
+            painter.setBrush(QColor(255, 60, 60, 220))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(int(tx - 3), int(ty - 3), 6, 6)
+
+            # Subtle glow ring
+            painter.setBrush(QColor(255, 60, 60, 40))
+            painter.drawEllipse(int(tx - 6), int(ty - 6), 12, 12)
+
+        elif s.toy_type == "ball":
+            # Colored circle (yarn ball)
+            alpha = 220
+            painter.setBrush(QColor(255, 120, 180, alpha))
+            painter.setPen(QPen(QColor(200, 80, 140, alpha), 1.5))
+            painter.drawEllipse(int(tx - 8), int(ty - 8), 16, 16)
+
+            # Inner highlight
+            painter.setBrush(QColor(255, 180, 210, 120))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(int(tx - 3), int(ty - 3), 6, 6)
