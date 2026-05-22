@@ -165,6 +165,15 @@ def _maybe_walk(dt: float, state) -> None:
         state.walk_accum = 0.0
 
 
+def _get_weather_behavior_mod(state) -> dict:
+    """Get weather behavior multipliers (wander, sleep, chase)."""
+    try:
+        from core.weather import get_weather_modifier
+        return get_weather_modifier(state)
+    except (ImportError, AttributeError):
+        return {"wander": 1.0, "sleep": 1.0, "chase": 1.0}
+
+
 def _walk_chance_per_tick(state) -> float:
     """Chance of starting a random walk per tick."""
     hour = datetime.now().hour
@@ -206,4 +215,6 @@ def _wander_chance_per_tick(state) -> float:
     else:
         base = 0.001   # dawn/dusk
     boredom_mod = state.boredom / 200.0
-    return base * (1.0 + boredom_mod)
+    # Weather modifier: stormy/snowy → 0, rainy → reduced
+    wmod = _get_weather_behavior_mod(state).get("wander", 1.0)
+    return base * (1.0 + boredom_mod) * wmod

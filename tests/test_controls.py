@@ -99,8 +99,19 @@ class TestControls(unittest.TestCase):
         result = self.controls.handle_key(Qt.Key.Key_Space)
         self.assertFalse(result)
 
-    def test_f_key_returns_false(self):
-        """F key returns False (not handled)."""
+    def test_ctrl_f_feeds_cat(self):
+        """Ctrl+F feeds the cat (reduces hunger, cycles food)."""
+        self.state.hunger = 50.0
+        with patch.object(self.controls, '_feed_cycle') as mock_feed:
+            result = self.controls.handle_key(
+                Qt.Key.Key_F,
+                modifiers=Qt.KeyboardModifier.ControlModifier
+            )
+            self.assertTrue(result)
+            mock_feed.assert_called_once()
+
+    def test_f_key_alone_returns_false(self):
+        """Plain F key (without Ctrl) returns False."""
         result = self.controls.handle_key(Qt.Key.Key_F)
         self.assertFalse(result)
 

@@ -171,3 +171,28 @@ PLAY_TOY_REACH_DISTANCE = 20.0
 BLINK_INTERVAL_MIN = 2.0
 BLINK_INTERVAL_MAX = 6.0
 BLINK_DURATION     = 0.10
+
+
+# ─── Weather ──────────────────────────────────────────────────────────────
+WEATHER_CITY = "Mumbai"             # Default city for wttr.in
+WEATHER_CACHE_INTERVAL = 1800       # Seconds between fetches (30 min)
+WEATHER_RETRIES = 3                  # Fetch retry count
+WEATHER_RETRY_DELAY = 2.0           # Seconds between retries
+
+
+# ─── Smart Needs: Time-of-Day Multipliers ──────────────────────────────────
+# Each tuple: (start_hour, end_hour, multiplier)
+# Applied to base drain rate: base_rate * tod_mul * weather_mul
+NEED_TIME_MULTIPLIERS = {
+    "energy": ((6, 12, 2.0), (22, 6, 0.5)),
+    "hunger": ((7, 9, 1.5), (19, 21, 1.5)),
+}
+
+
+# ─── Smart Needs: AFK & Critical Thresholds ───────────────────────────────
+AFK_BOREDOM_MULTIPLIER = 2.0
+AFK_THRESHOLD = 300                 # Seconds without mouse interaction → AFK
+HUNGER_URGENT_THRESHOLD = 80
+ENERGY_CRITICAL_THRESHOLD = 20
+BOREDOM_ERRATIC_THRESHOLD = 80
+FEED_HUNGER_REDUCTION = 30          # Hunger reduced per Ctrl+F press

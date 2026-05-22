@@ -144,3 +144,13 @@ class CatState:
     toy_active: bool = False              # toy currently exists on screen
     toy_type: str | None = None           # "laser" or "ball"
     chase_timeout: float = 0.0            # countdown: stop chasing if mouse stays still
+
+    # ── Weather ──
+    weather_condition: str = "cloudy"     # sunny|cloudy|rainy|snowy|stormy|unknown
+    weather_temp: int = 25                # Celsius, from API
+    weather_last_fetch: float = 0.0       # monotonic time of last fetch
+    weather_fetch_timer: float = 0.0      # countdown until next fetch
+
+    # ── Smart Needs ──
+    afk_timer: float = 0.0               # seconds since last mouse interaction
+    feed_cycle_index: int = 0             # index for Ctrl+F food cycling
