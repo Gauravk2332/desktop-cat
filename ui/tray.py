@@ -53,7 +53,9 @@ class CatTrayIcon:
     def _open_settings(self):
         """Open the settings dialog."""
         from ui.settings import SettingsDialog
-        SettingsDialog.open()
+        result = SettingsDialog.open()
+        if result is not None and hasattr(self, '_on_settings_changed'):
+            self._on_settings_changed()
 
     def _on_show_toggled(self, checked: bool):
         """Toggle window visibility from tray menu."""

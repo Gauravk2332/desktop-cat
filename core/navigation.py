@@ -199,6 +199,102 @@ def process_actions(state) -> None:
                 s.deep_sleep = False
 
 
+def update_chase(dt: float, state) -> None:
+    """Chase toward laser pointer / cursor position.
+    Moves at CHASE_SPEED_MULTIPLIER * WALK_SPEED.
+    When close enough, sit and look around.
+    If mouse hasn't moved for CHASE_TIMEOUT, go back to SIT.
+    """
+    if state.toy_target is None:
+        state.state = config.STATE_SIT
+        state.toy_active = False
+        state.toy_type = None
+        return
+
+    tx, ty = state.toy_target
+    dx = tx - state.cat_x
+    dy = ty - state.cat_y
+    dist = math.hypot(dx, dy)
+
+    # Face toward target
+    state.facing = dx > 0
+
+    if dist <= config.CHASE_REACH_DISTANCE:
+        # Reached the target — sit and look around
+        state.state = config.STATE_SIT
+        state.toy_active = False
+        state.toy_type = None
+        return
+
+    # Move toward target at excited speed
+    speed = config.WALK_SPEED * config.CHASE_SPEED_MULTIPLIER * dt
+    if dist > 0:
+        state.cat_x += (dx / dist) * speed
+        state.cat_y += (dy / dist) * speed
+
+    # Clamp to screen bounds
+    margin = config.WANDER_OFFSET
+    y_min = state.screen_height * config.CAT_MIN_Y_FRACTION
+    y_max = state.screen_height - config.CAT_BASELINE
+    state.cat_x = max(float(margin), min(state.cat_x, float(state.screen_width - margin)))
+    state.cat_y = max(float(y_min), min(state.cat_y, float(y_max)))
+
+    state.walk_elapsed += dt
+    state.walk_frame = int((state.walk_elapsed * 9.0) % 4)  # faster walk cycle
+
+
+def update_play(dt: float, state) -> None:
+    """Play with yarn ball / butterfly toy.
+    If toy is active, cat walks toward it.
+    When reaching the toy, trigger heart burst and disappear.
+    """
+    if not state.toy_active or state.toy_target is None:
+        state.state = config.STATE_SIT
+        state.toy_active = False
+        state.toy_type = None
+        return
+
+    # Tick toy timer
+    state.toy_timer -= dt
+    if state.toy_timer <= 0:
+        state.state = config.STATE_SIT
+        state.toy_active = False
+        state.toy_type = None
+        return
+
+    tx, ty = state.toy_target
+    dx = tx - state.cat_x
+    dy = ty - state.cat_y
+    dist = math.hypot(dx, dy)
+
+    # Face toward toy
+    state.facing = dx > 0
+
+    if dist <= config.PLAY_TOY_REACH_DISTANCE:
+        # Caught the toy! Hearts + disappear
+        _spawn_hearts(state, count=5)
+        state.state = config.STATE_SIT
+        state.toy_active = False
+        state.toy_type = None
+        return
+
+    # Walk toward toy
+    speed = config.WALK_SPEED * dt
+    if dist > 0:
+        state.cat_x += (dx / dist) * speed
+        state.cat_y += (dy / dist) * speed
+
+    # Clamp
+    margin = config.WANDER_OFFSET
+    y_min = state.screen_height * config.CAT_MIN_Y_FRACTION
+    y_max = state.screen_height - config.CAT_BASELINE
+    state.cat_x = max(float(margin), min(state.cat_x, float(state.screen_width - margin)))
+    state.cat_y = max(float(y_min), min(state.cat_y, float(y_max)))
+
+    state.walk_elapsed += dt
+    state.walk_frame = int((state.walk_elapsed * 6.5) % 4)
+
+
 def _spawn_hearts(state, count: int = 3) -> None:
     """Spawn floating hearts above the cat."""
     for _ in range(count):

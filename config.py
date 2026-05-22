@@ -43,6 +43,8 @@ STATE_WALK    = "WALK"
 STATE_SLEEP   = "SLEEP"
 STATE_GO_HOME = "GO_HOME"
 STATE_WANDER  = "WANDER"
+STATE_CHASE   = "CHASE"
+STATE_PLAY    = "PLAY"
 
 # ─── Wander behavior ──────────────────────────────────────────────────────
 WANDER_DURATION_MIN = 2.0     # min seconds per wander walk
@@ -156,6 +158,14 @@ def flip_x(x: float, facing: bool) -> float:
     """Flip x-coordinate based on facing direction."""
     return x if facing else -x
 
+
+# ─── Toys ──────────────────────────────────────────────────────────────────
+CHASE_SPEED_MULTIPLIER = 1.5
+CHASE_REACH_DISTANCE = 30.0
+CHASE_TIMEOUT = 2.0
+PLAY_TOY_INTERVAL = 15.0
+PLAY_TOY_DURATION = 5.0
+PLAY_TOY_REACH_DISTANCE = 20.0
 
 # ─── Animation Timing ─────────────────────────────────────────────────────
 BLINK_INTERVAL_MIN = 2.0
