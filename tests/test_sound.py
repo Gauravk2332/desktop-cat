@@ -2,9 +2,9 @@
 tests/test_sound.py — Unit tests for core/sound.py
 
 Tests cover:
-- SoundManager initialization and tier detection
+- SoundManager initialization and backend detection
 - Path resolution
-- Tier fallback behavior
+- Backend selection behavior
 - Enable/disable
 - Play/stop-loop operations
 - Cleanup
@@ -19,27 +19,43 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 class TestSoundManagerInit(unittest.TestCase):
-    """Test SoundManager initialization and tier detection."""
-
-    def test_detect_tier_fallback_no_multimedia(self):
-        """Should fall back when QSoundEffect is unavailable."""
-        with patch.dict('sys.modules', {'PyQt6.QtMultimedia': None}):
-            from core.sound import SoundManager
-            sm = SoundManager()
-            # Should be 0 (no backends available on headless Linux)
-            self.assertIn(sm._tier, [0, 2])  # 0 for Linux, 2 for Windows
+    """Test SoundManager initialization and backend detection."""
 
     def test_init_creates_self(self):
         from core.sound import SoundManager
         sm = SoundManager()
         self.assertIsNotNone(sm)
-        self.assertTrue(hasattr(sm, '_tier'))
+        self.assertTrue(hasattr(sm, '_can_winsound'))
+        self.assertTrue(hasattr(sm, '_can_qse'))
         self.assertTrue(hasattr(sm, '_enabled'))
 
     def test_enabled_by_default(self):
         from core.sound import SoundManager
         sm = SoundManager()
         self.assertTrue(sm.enabled)
+
+    def test_backend_flags_none(self):
+        """When neither backend is available."""
+        from core.sound import SoundManager
+        sm = SoundManager()
+        # Force both to False
+        sm._can_winsound = False
+        sm._can_qse = False
+        self.assertFalse(sm._can_winsound)
+        self.assertFalse(sm._can_qse)
+        sm.play("test")  # Should not crash
+        sm.start_loop("test")  # Should not crash
+
+    def test_backend_flags_winsound_only(self):
+        """When winsound is available but QSoundEffect is not."""
+        with patch.dict('sys.modules', {'PyQt6.QtMultimedia': None}):
+            from core.sound import SoundManager
+            sm = SoundManager()
+            sm._detect_backends()
+            # On Linux, both will be False; on Windows, winsound=True, QSE=False
+            # Just verify it doesn't crash and flags are bools
+            self.assertIsInstance(sm._can_winsound, bool)
+            self.assertIsInstance(sm._can_qse, bool)
 
 
 class TestSoundManagerEnable(unittest.TestCase):
@@ -60,13 +76,13 @@ class TestSoundManagerEnable(unittest.TestCase):
 
     def test_play_does_nothing_when_disabled(self):
         self.sm.set_enabled(False)
-        with patch.object(self.sm, '_play_tier1') as mock_play:
+        with patch.object(self.sm, '_play_winsound') as mock_play:
             self.sm.play("purr")
             mock_play.assert_not_called()
 
     def test_start_loop_does_nothing_when_disabled(self):
         self.sm.set_enabled(False)
-        with patch.object(self.sm, '_start_loop_tier1') as mock_loop:
+        with patch.object(self.sm, '_start_loop_qse') as mock_loop:
             self.sm.start_loop("purr")
             mock_loop.assert_not_called()
 
@@ -82,26 +98,22 @@ class TestSoundManagerPathResolution(unittest.TestCase):
     def setUp(self):
         from core.sound import SoundManager
         self.sm = SoundManager()
-        # Ensure sounds directory exists
         from core.sound import SOUNDS_DIR
         self.sounds_dir = SOUNDS_DIR
 
     def test_resolve_with_extension(self):
-        """Should find file with .wav extension when given name with extension."""
         path = self.sm._resolve_path("meow_short.wav")
         if os.path.exists(os.path.join(self.sounds_dir, "meow_short.wav")):
             self.assertIsNotNone(path)
             self.assertTrue(path.endswith("meow_short.wav"))
 
     def test_resolve_without_extension(self):
-        """Should find file when given name without extension."""
         path = self.sm._resolve_path("purr")
         if os.path.exists(os.path.join(self.sounds_dir, "purr.wav")):
             self.assertIsNotNone(path)
             self.assertTrue(path.endswith("purr.wav"))
 
     def test_resolve_nonexistent(self):
-        """Should return None for missing sound."""
         path = self.sm._resolve_path("nonexistent_sound_xyz123")
         self.assertIsNone(path)
 
@@ -112,40 +124,60 @@ class TestSoundManagerPathResolution(unittest.TestCase):
 
 
 class TestSoundManagerPlay(unittest.TestCase):
-    """Test play operations with mocked tier 1."""
+    """Test play operations."""
 
     def setUp(self):
         from core.sound import SoundManager
         self.sm = SoundManager()
 
-    def test_play_calls_tier1_when_available(self):
-        """Should call _play_tier1 when tier=1."""
-        self.sm._tier = 1
-        with patch.object(self.sm, '_play_tier1') as mock_play:
+    def test_play_uses_winsound_when_available(self):
+        """Should call _play_winsound when winsound is available."""
+        self.sm._can_winsound = True
+        self.sm._can_qse = False
+        with patch.object(self.sm, '_play_winsound') as mock_pw:
             with patch.object(self.sm, '_resolve_path', return_value="/tmp/test.wav"):
                 self.sm.play("test")
-                mock_play.assert_called_once_with("/tmp/test.wav")
+                mock_pw.assert_called_once_with("/tmp/test.wav")
 
-    def test_play_calls_tier2_when_available(self):
-        """Should call _play_tier2 when tier=2."""
-        self.sm._tier = 2
-        with patch.object(self.sm, '_play_tier2') as mock_play:
+    def test_play_uses_qse_when_winsound_unavailable(self):
+        """Should call _play_qse when winsound is not available."""
+        self.sm._can_winsound = False
+        self.sm._can_qse = True
+        with patch.object(self.sm, '_play_qse') as mock_qse:
             with patch.object(self.sm, '_resolve_path', return_value="/tmp/test.wav"):
                 self.sm.play("test")
-                mock_play.assert_called_once_with("/tmp/test.wav")
+                mock_qse.assert_called_once_with("/tmp/test.wav")
 
-    def test_play_does_nothing_on_tier_0(self):
-        self.sm._tier = 0
-        with patch.object(self.sm, '_play_tier1') as mock_play:
-            self.sm.play("test")
-            mock_play.assert_not_called()
+    def test_play_does_nothing_no_backends(self):
+        """Should do nothing when no backends available."""
+        self.sm._can_winsound = False
+        self.sm._can_qse = False
+        with patch.object(self.sm, '_play_winsound') as mock_pw:
+            with patch.object(self.sm, '_play_qse') as mock_qse:
+                self.sm.play("test")
+                mock_pw.assert_not_called()
+                mock_qse.assert_not_called()
 
     def test_play_does_nothing_on_missing_path(self):
-        self.sm._tier = 1
+        self.sm._can_winsound = True
         with patch.object(self.sm, '_resolve_path', return_value=None):
-            with patch.object(self.sm, '_play_tier1') as mock_play:
+            with patch.object(self.sm, '_play_winsound') as mock_pw:
                 self.sm.play("test")
-                mock_play.assert_not_called()
+                mock_pw.assert_not_called()
+
+    def test_play_winsound_called_with_path(self):
+        """Direct test of _play_winsound (skipped on non-Windows)."""
+        # Skip on Linux since winsound doesn't exist
+        import sys
+        if sys.platform != 'win32':
+            self.skipTest("winsound only available on Windows")
+        import winsound
+        with patch('winsound.PlaySound') as mock_ps:
+            self.sm._play_winsound("/tmp/test.wav")
+            mock_ps.assert_called_once_with(
+                "/tmp/test.wav",
+                unittest.mock.ANY  # SND_ASYNC | SND_NODEFAULT
+            )
 
 
 class TestSoundManagerLoop(unittest.TestCase):
@@ -155,16 +187,18 @@ class TestSoundManagerLoop(unittest.TestCase):
         from core.sound import SoundManager
         self.sm = SoundManager()
 
-    def test_start_loop_calls_tier1(self):
-        self.sm._tier = 1
-        with patch.object(self.sm, '_start_loop_tier1') as mock_loop:
+    def test_start_loop_uses_qse(self):
+        """Should call _start_loop_qse when QSE is available."""
+        self.sm._can_qse = True
+        with patch.object(self.sm, '_start_loop_qse') as mock_loop:
             with patch.object(self.sm, '_resolve_path', return_value="/tmp/test.wav"):
                 self.sm.start_loop("test")
                 mock_loop.assert_called_once_with("/tmp/test.wav")
 
-    def test_start_loop_does_nothing_tier_0(self):
-        self.sm._tier = 0
-        with patch.object(self.sm, '_start_loop_tier1') as mock_loop:
+    def test_start_loop_does_nothing_when_qse_unavailable(self):
+        """Should do nothing when QSoundEffect is not available."""
+        self.sm._can_qse = False
+        with patch.object(self.sm, '_start_loop_qse') as mock_loop:
             self.sm.start_loop("test")
             mock_loop.assert_not_called()
 

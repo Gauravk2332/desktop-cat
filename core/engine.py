@@ -28,6 +28,7 @@ import core.navigation as navigation
 from core.sound import SoundManager
 from core.navigation import _spawn_hearts
 from core.toast import notify
+from behavior.vocalizations import VocalizationSystem
 
 
 def _per_cat_fields():
@@ -56,7 +57,6 @@ class Engine:
         self._prev_cat_at_home: list[bool] = [s.get("at_home", False) for s in state.cats]
         self._prev_hunger: list[float] = [s.get("hunger", 20.0) for s in state.cats]
 
-        self._footstep_counter = 0.0
         self.systems: OrderedDict[str, object] = OrderedDict()
         self._elapsed = QElapsedTimer()
         self._elapsed.start()
@@ -91,6 +91,11 @@ class Engine:
         self._mouse_timer = QTimer(window)
         self._mouse_timer.timeout.connect(self._check_mouse)
         self._mouse_timer.start(200)
+
+        # Vocalization system
+        self._vocalization = VocalizationSystem(state)
+        state._mouse_x = 0.0
+        state._mouse_y = 0.0
 
         # Speech state transition tracking
         self._prev_speech_states: list[str] = [s["state"] for s in state.cats]
@@ -283,60 +288,72 @@ class Engine:
     # ── Sound system ───────────────────────────────────────────────────
 
     def _update_sounds(self, dt: float) -> None:
-        """Handle sound playback based on state transitions (cat[0] for now)."""
+        """Handle all sound playback: loops + behavioral vocalizations.
+
+        Two concerns:
+          1. Loop management: purr (while sleeping at home), sleep_breathing (field sleep)
+          2. Behavioral vocalizations: meows, trills, chirps, hisses via VocalizationSystem
+
+        Now iterates ALL cats for behavioral sounds. Loop sounds still cat[0] only.
+        """
         s = self.state
         if not s.cats:
             return
-        cat = s.cats[0]
-        prev_state = self._prev_cat_states[0] if self._prev_cat_states else cat["state"]
 
         self.sound.set_enabled(self._sound_enabled)
 
-        if cat["state"] != prev_state:
-            if cat["state"] == config.STATE_SLEEP:
-                if cat.get("at_home"):
+        # ── Loop management for cat[0] ──────────────────────────────
+        cat0 = s.cats[0]
+        prev_state0 = self._prev_cat_states[0] if self._prev_cat_states else cat0["state"]
+
+        # Sleep loop transitions
+        if cat0["state"] != prev_state0:
+            if cat0["state"] == config.STATE_SLEEP:
+                if cat0.get("at_home"):
                     self.sound.start_loop("purr")
                 else:
                     self.sound.start_loop("sleep_breathing")
                 self._send_toast("sleep", "💤 Sleepy", "Cat is sleeping")
-            elif prev_state == config.STATE_SLEEP:
+            elif prev_state0 == config.STATE_SLEEP:
                 self.sound.stop_loop()
                 self.sound.play("yawn")
-            elif cat["state"] in (config.STATE_WALK, config.STATE_WANDER,
-                                  config.STATE_CHASE, config.STATE_PLAY):
-                self.sound.play("footstep")
-            elif cat["state"] == config.STATE_GO_HOME:
+            elif cat0["state"] == config.STATE_GO_HOME:
                 self.sound.play("meow_short")
 
-        # Update prev tracking
-        prev_at_home = self._prev_cat_at_home[0] if self._prev_cat_at_home else cat.get("at_home", False)
-        while len(self._prev_cat_states) < len(s.cats):
-            self._prev_cat_states.append(cat["state"])
-        while len(self._prev_cat_at_home) < len(s.cats):
-            self._prev_cat_at_home.append(cat.get("at_home", False))
-
-        self._prev_cat_states[0] = cat["state"]
-        self._prev_cat_at_home[0] = cat.get("at_home", False)
-
-        # At-home vs field sleep sound switch
-        if cat["state"] == config.STATE_SLEEP and cat.get("at_home") != (self._prev_cat_at_home[0] if len(self._prev_cat_at_home) > 0 else False):
+        # At-home vs field sleep switch
+        prev_at_home = self._prev_cat_at_home[0] if self._prev_cat_at_home else cat0.get("at_home", False)
+        if cat0["state"] == config.STATE_SLEEP and cat0.get("at_home") != prev_at_home:
             self.sound.stop_loop()
-            if cat.get("at_home"):
+            if cat0.get("at_home"):
                 self.sound.start_loop("purr")
             else:
                 self.sound.start_loop("sleep_breathing")
 
-        self._prev_cat_states[0] = cat["state"]
-        self._prev_cat_at_home[0] = cat.get("at_home", False)
+        # Update prev cat[0] tracking
+        while len(self._prev_cat_states) < len(s.cats):
+            self._prev_cat_states.append(cat0["state"])
+        while len(self._prev_cat_at_home) < len(s.cats):
+            self._prev_cat_at_home.append(cat0.get("at_home", False))
+        self._prev_cat_states[0] = cat0["state"]
+        self._prev_cat_at_home[0] = cat0.get("at_home", False)
 
-        # Footstep rhythm
-        if cat["state"] in (config.STATE_WALK, config.STATE_WANDER,
-                            config.STATE_CHASE, config.STATE_PLAY):
-            self._footstep_counter += dt
-            if self._footstep_counter >= 0.3:
-                self._footstep_counter = 0.0
-                suffix = "2" if cat.get("walk_frame", 0) % 2 == 0 else ""
-                self.sound.play(f"footstep{suffix}")
+        # ── Footstep rhythm (all moving cats) ────────────────────────
+        for i, cat in enumerate(s.cats):
+            if cat["state"] in (config.STATE_WALK, config.STATE_WANDER,
+                                config.STATE_CHASE, config.STATE_PLAY):
+                if cat.get("_footstep_counter", 0.0) >= 0.3:
+                    cat["_footstep_counter"] = 0.0
+                    suffix = "2" if cat.get("walk_frame", 0) % 2 == 0 else ""
+                    self.sound.play(f"footstep{suffix}")
+                else:
+                    cat["_footstep_counter"] = cat.get("_footstep_counter", 0.0) + dt
+
+        # ── Behavioral vocalizations (all cats) ─────────────────────
+        for i, cat in enumerate(s.cats):
+            winner = self._vocalization.update(dt, cat, s)
+            if winner is not None:
+                # Check cooldown map for this sound
+                self.sound.play(winner.name)
 
     # ── Toast notifications ──────────────────────────────────────────
 
@@ -581,6 +598,8 @@ class Engine:
         s = self.state
         cursor = QCursor.pos()
         s.mouse_pos = (cursor.x(), cursor.y())
+        s._mouse_x = cursor.x()
+        s._mouse_y = cursor.y()
 
         # Mouse moving detection
         dx_move = cursor.x() - self._prev_mouse_pos.x()
