@@ -25,12 +25,13 @@ import config
 from core.state import CatState
 from cat import body, tail, legs, head, eyes
 from cat.home import draw_hut_frame, draw_hut_front, draw_sleeping_cat, draw_hearts
+from core.controls import Controls
 
 
 class CatWindow(QWidget):
     """Full-screen transparent overlay — the cat lives here."""
 
-    def __init__(self, state: CatState):
+    def __init__(self, state: CatState, engine=None):
         super().__init__()
         self.state = state
         self.setWindowTitle("Cat")
@@ -43,7 +44,11 @@ class CatWindow(QWidget):
             | Qt.WindowType.Tool
             | Qt.WindowType.X11BypassWindowManagerHint
         )
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._position_window()
+
+        # Keyboard controls
+        self.controls = Controls(self, state, engine)
 
     # ── DWM Border Fix (Windows 11) ────────────────────────────────────
 
@@ -84,6 +89,32 @@ class CatWindow(QWidget):
         # Cat starts at bottom-center of screen
         self.state.cat_x = float(geo.width() // 2)
         self.state.cat_y = float(geo.height() - config.CAT_BASELINE)
+
+    # ── Keyboard ─────────────────────────────────────────────────────────
+
+    def keyPressEvent(self, event):
+        """Handle key presses via the Controls delegate."""
+        self.controls.handle_key(event.key())
+
+    def _draw_interact_indicator(self, painter):
+        """Draw subtle indicator bar when click-through is disabled."""
+        w = self.state.screen_width
+        bar_w = 120
+        bar_h = 22
+        bar_x = w // 2 - bar_w // 2
+        bar_y = 4
+
+        # Semi-transparent dark bar
+        from PyQt6.QtGui import QPainterPath
+        bar = QPainterPath()
+        bar.addRoundedRect(bar_x, bar_y, bar_w, bar_h, 8, 8)
+        painter.fillPath(bar, QColor(0, 0, 0, 100))
+
+        # Text
+        painter.setPen(QColor(255, 255, 255, 200))
+        painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        painter.drawText(bar_x, bar_y, bar_w, bar_h,
+                         Qt.AlignmentFlag.AlignCenter, "🎯 Interact")
 
     # ── Draw pipeline ───────────────────────────────────────────────────
 
@@ -126,6 +157,13 @@ class CatWindow(QWidget):
                 self._draw_walk(painter, cx, cy)
             else:  # STATE_SIT
                 self._draw_sit(painter, cx, cy)
+
+            # 4. Draw floating hearts (on pet)
+            draw_hearts(painter, self.state)
+
+            # 5. Interact mode indicator
+            if not self.state.click_through:
+                self._draw_interact_indicator(painter)
 
             painter.end()
         except Exception as e:

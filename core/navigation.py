@@ -179,6 +179,8 @@ def process_actions(state) -> None:
         s.boredom = 0.0
         if action == "pet":
             s.consecutive_pets += 1
+            # Spawn floating hearts
+            _spawn_hearts(s)
             if s.consecutive_pets >= 5:
                 trigger_purr(s)
                 s.consecutive_pets = 0
@@ -195,3 +197,14 @@ def process_actions(state) -> None:
                 s.state = config.STATE_SIT
                 s.energy = min(100.0, s.energy + 10.0)
                 s.deep_sleep = False
+
+
+def _spawn_hearts(state, count: int = 3) -> None:
+    """Spawn floating hearts above the cat."""
+    for _ in range(count):
+        state.hearts.append([
+            random.uniform(-12, 12),  # x_offset from cat center
+            random.uniform(-30, -20),  # y_offset (above cat)
+            1.5,                       # lifetime (seconds)
+            random.uniform(6, 10),     # size (radius)
+        ])

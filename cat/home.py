@@ -12,6 +12,7 @@ Drawing order in window.py:
 
 import math
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainterPath, QColor, QFont, QPen
 
 import config
@@ -239,6 +240,37 @@ def _draw_curled_cat(painter, hx: int, hy: int, state) -> None:
     painter.fillPath(nose, config.C_NOSE)
 
     painter.restore()
+
+
+def draw_hearts(painter, state) -> None:
+    """Draw floating hearts above the cat when petted."""
+    for h in list(state.hearts):
+        x_offset, y_offset, lifetime, size = h
+        if lifetime <= 0:
+            continue
+
+        cx = state.cat_x + x_offset
+        cy = state.cat_y + y_offset
+        heart_size = size
+        alpha = min(255, int(lifetime * 255))
+
+        color = QColor(0xFF, 0x60, 0x80, alpha)
+        painter.setBrush(color)
+        painter.setPen(Qt.PenStyle.NoPen)
+
+        # Simple heart: two overlapping circles + triangle
+        r = heart_size * 0.5
+        # Left lobe
+        painter.drawEllipse(int(cx - r * 1.1), int(cy - r * 0.8), int(r * 1.4), int(r * 1.4))
+        # Right lobe
+        painter.drawEllipse(int(cx - r * 0.3), int(cy - r * 0.8), int(r * 1.4), int(r * 1.4))
+        # Triangle pointing down
+        heart_path = QPainterPath()
+        heart_path.moveTo(cx - r * 1.2, cy - r * 0.1)
+        heart_path.lineTo(cx + r * 1.2, cy - r * 0.1)
+        heart_path.lineTo(cx, cy + r * 0.6)
+        heart_path.closeSubpath()
+        painter.drawPath(heart_path)
 
 
 def _draw_z_badge(painter, hx: int, hy: int, state) -> None:

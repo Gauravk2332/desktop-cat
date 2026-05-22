@@ -63,10 +63,16 @@ class CatState:
     eye_target: tuple = (0.0, 0.0)
     eye_current: tuple = (0.0, 0.0)
 
+    # ── Hearts (on pet) ──
+    hearts: list = field(default_factory=list)  # [x_offset, y_offset, lifetime, size]
+
     # ── Mouse / context ──
     mouse_pos: tuple = (0.0, 0.0)
     mouse_near: bool = False
     last_interaction: float = 0.0
+
+    # ── Click-through state (toggled by Controls) ──
+    click_through: bool = True
 
     # ── Persistence ──
     save_accum: float = 0.0
