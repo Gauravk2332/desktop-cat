@@ -130,8 +130,11 @@ class _APIHandler(BaseHTTPRequestHandler):
         elif action == "remove_cat":
             s = _STATE
             if s:
-                ok = s.remove_last_cat()
-                self._send_json({"status": "ok" if ok else "cannot remove"})
+                if len(s.cats) <= 1:
+                    self._send_json({"error": "minimum 1 cat"}, 400)
+                else:
+                    s.cats.pop()
+                    self._send_json({"status": "ok"})
             else:
                 self._send_json({"error": "state not available"}, 503)
             return
