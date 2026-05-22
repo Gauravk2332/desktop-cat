@@ -116,12 +116,31 @@ class _APIHandler(BaseHTTPRequestHandler):
             return
 
         action = data.get("action", "")
-        if action not in ("pet", "feed", "wake"):
-            self._send_json({"error": f"unknown_action: {action}"}, 400)
+        if action == "add_cat":
+            s = _STATE
+            if s:
+                cat_id = s.add_cat()
+                if cat_id is not None:
+                    self._send_json({"status": "ok", "cat_id": cat_id})
+                else:
+                    self._send_json({"error": "max cats reached"}, 400)
+            else:
+                self._send_json({"error": "state not available"}, 503)
             return
-
-        action_queue.put(action)
-        self._send_json({"status": "ok", "action": action})
+        elif action == "remove_cat":
+            s = _STATE
+            if s:
+                ok = s.remove_last_cat()
+                self._send_json({"status": "ok" if ok else "cannot remove"})
+            else:
+                self._send_json({"error": "state not available"}, 503)
+            return
+        elif action in ("pet", "feed", "wake"):
+            action_queue.put(action)
+            self._send_json({"status": "ok", "action": action})
+            return
+        else:
+            self._send_json({"error": f"unknown_action: {action}"}, 400)
 
 
 def start_api():
