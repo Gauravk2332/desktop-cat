@@ -27,6 +27,7 @@ from core.state import CatState, SPEECH_MOODS
 import core.navigation as navigation
 from core.sound import SoundManager
 from core.navigation import _spawn_hearts
+from core.toast import notify
 
 
 class Engine:
@@ -56,6 +57,10 @@ class Engine:
         from behavior import needs, transitions
         self.register("needs", needs)
         self.register("transitions", transitions)
+
+        # Register weather system
+        from core import weather
+        self.register("weather", weather)
         self._walk_et = QElapsedTimer()
         self._walk_et.start()
         self._walk_pause_et = QElapsedTimer()
@@ -90,6 +95,18 @@ class Engine:
         self._toy_spawn_timer: float = 0.0
         self._mouse_still_timer: float = 0.0
         self._prev_mouse_pos_ts: tuple = (0.0, 0.0)
+
+        # Toast notification cooldown (seconds per notification type)
+        self._toast_cooldowns: dict[str, float] = {}
+        self._boredom_notify_timer: float = 0.0
+
+    def _send_toast(self, kind: str, title: str, message: str, cooldown: float = 1800.0) -> None:
+        """Send a toast notification if the cooldown for this kind has elapsed."""
+        now = time.monotonic()
+        last = self._toast_cooldowns.get(kind, 0.0)
+        if now - last >= cooldown:
+            notify(title, message)
+            self._toast_cooldowns[kind] = now
 
     def register(self, name: str, system) -> None:
         """Register a system with an update(dt, state) method."""
@@ -172,16 +189,19 @@ class Engine:
             # 6. Toy system (yarn ball spawning, chase timeout)
             self._update_toys(dt)
 
-            # 7. Clamp needs
+            # 7. Toast notifications
+            self._update_notifications(dt)
+
+            # 8. Clamp needs
             self._clamp_needs()
 
-            # 8. Persist
+            # 9. Persist
             self.state.save_accum += dt
             if self.state.save_accum >= config.SAVE_INTERVAL:
                 self.state.save_accum = 0.0
                 self.save_state()
 
-            # 9. Repaint
+            # 10. Repaint
             self.window.update()
 
         except Exception as e:
@@ -201,6 +221,7 @@ class Engine:
                     self.sound.start_loop("purr")
                 else:
                     self.sound.start_loop("sleep_breathing")
+                self._send_toast("sleep", "💤 Sleepy", "Cat is sleeping")
             elif self._prev_state == config.STATE_SLEEP:
                 self.sound.stop_loop()
                 self.sound.play("yawn")
@@ -228,6 +249,25 @@ class Engine:
                 self._footstep_counter = 0.0
                 suffix = "2" if s.walk_frame % 2 == 0 else ""
                 self.sound.play(f"footstep{suffix}")
+
+    # ── Toast notifications ──────────────────────────────────────────
+
+    def _update_notifications(self, dt: float) -> None:
+        """Check conditions and send toast notifications with cooldown."""
+        s = self.state
+
+        # Low energy notification
+        if s.energy < 15.0 and s.state != config.STATE_SLEEP:
+            self._send_toast("low_energy", "🥱 Tired", "Cat needs rest")
+
+        # Boredom-based "miss you" notification (5+ min of high boredom)
+        if s.state != config.STATE_SLEEP:
+            self._boredom_notify_timer += dt
+            if self._boredom_notify_timer >= 300.0:
+                self._send_toast("miss_you", "👋 Miss you!", "Cat hasn't seen you in a while")
+                self._boredom_notify_timer = 0.0
+        else:
+            self._boredom_notify_timer = 0.0
 
     def _update_animations(self, dt: float) -> None:
         s = self.state

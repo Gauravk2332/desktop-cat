@@ -25,6 +25,16 @@
 - **Zzz particles** — float upward with horizontal drift while sleeping
 - **Expression system** — 7 moods (neutral, happy, sleepy, alert, squint, angry, surprised) with configurable eye/pupil geometry and blush
 - **Breathing animation** — gentle body expansion/contraction at state-dependent speed (sit: 1.5Hz, walk: 2.5Hz, sleep: 0.8Hz, deep sleep: 0.3Hz)
+- **Speech bubbles** — mood-based messages with priority queue, fade in/out, proximity triggers
+- **Sound effects** — procedurally generated WAVs (footsteps, purr, meow, yawn, sleep breathing, eat, stretch)
+- **Laser pointer chase** — move cursor fast when in interact mode, cat chases the red dot
+- **Yarn ball toy** — auto-spawns near cursor every 15s, cat plays and catches it for hearts
+- **Windows toast notifications** — alerts for sleep, low energy, and prolonged absence (30min cooldown)
+- **Coat picker** — choose between Russian Blue, Orange Tabby, Calico, Tuxedo, Cream, and Blue Point
+- **Autostart** — optional Windows startup registration (via HKCU Run key)
+- **Settings dialog** — skinned UI for sound, autostart, coat color
+- **System tray** — icon with context menu (hide, settings, quit)
+- **Keyboard shortcuts** — toggle visibility, click-through, reset position (see table below)
 - **HTTP API** — pet, feed, and wake the cat from any tool (port 18789)
 - **State persistence** — saves every 30s, survives restarts with catch-up drain
 - **Russian Blue color palette** — steel gray-blue body, soft pink inner ears and nose, light warm gray belly
@@ -159,6 +169,23 @@ The cat dynamically morphs eye shape and pupil geometry based on context:
 
 Blush alpha also modulates (0.0 neutral → 0.0-1.0 based on reaction context).
 
+## Building (Windows executable)
+
+Create a standalone `.exe` with PyInstaller (run on Windows):
+
+```bash
+pip install pyinstaller
+python scripts/build.py
+```
+
+The executable is at `dist/DesktopCat.exe`. Package for distribution:
+
+```bash
+python scripts/package.py
+```
+
+Creates `DesktopCat.zip` with the exe + README.
+
 ## Installation
 
 ### Prerequisites
@@ -180,6 +207,17 @@ pip install PyQt6
 # Run
 python main.py
 ```
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `H` | Toggle cat window visibility |
+| `C` (Ctrl+Shift) | Toggle click-through / interact mode |
+| `R` | Reset cat position to screen center |
+| `Escape` | Toggle show/hide |
+
+When click-through is off (interact mode), mouse proximity triggers laser pointer chase. A blue "🎯 Interact" bar appears at the top of the screen.
 
 ## Configuration
 
@@ -362,6 +400,22 @@ SLEEP(at_home) ──(energy > 60 + linger)▶ SIT
 SLEEP(field) ────(energy > 85)─────────▶ SIT
 WALK ──(edge collision)────────────────▶ SIT
 ```
+
+## Sound credits
+
+All sound effects are procedurally generated via `scripts/generate_sounds.py` using NumPy and `soundfile`. No external audio assets required.
+
+| Sound | Description |
+|---|---|
+| `footstep.wav` / `footstep2.wav` | Soft padded footstep (two variants) |
+| `purr.wav` | Low-frequency purr loop (looping) |
+| `meow_short.wav` | Short meow on home arrival |
+| `yawn.wav` | Yawn on waking |
+| `sleep_breathing.wav` | Rhythmic breathing while sleeping (looping) |
+| `eat.wav` | Crunchy eat sound on feed |
+| `stretch.wav` | Stretch sound after waking |
+
+Sound can be toggled on/off via the settings dialog or system tray.
 
 ## Acknowledgements
 

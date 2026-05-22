@@ -94,7 +94,7 @@ class CatWindow(QWidget):
 
     def keyPressEvent(self, event):
         """Handle key presses via the Controls delegate."""
-        self.controls.handle_key(event.key())
+        self.controls.handle_key(event.key(), event.modifiers())
 
     def _draw_interact_indicator(self, painter):
         """Draw subtle indicator bar when click-through is disabled."""
@@ -139,37 +139,60 @@ class CatWindow(QWidget):
                 painter.setOpacity(0.6)
 
             # 1. Draw hut base + interior (always, replaces old bed)
-            draw_hut_frame(painter, self.state)
+            try:
+                draw_hut_frame(painter, self.state)
+            except Exception as e:
+                logging.debug("draw_hut_frame failed: %s", e)
 
             # 2. Draw cat inside hut if sleeping at home
-            if self.state.state == config.STATE_SLEEP and self.state.at_home:
-                draw_sleeping_cat(painter, self.state)
+            try:
+                if self.state.state == config.STATE_SLEEP and self.state.at_home:
+                    draw_sleeping_cat(painter, self.state)
+            except Exception as e:
+                logging.debug("draw_sleeping_cat failed: %s", e)
 
             # 3. Draw hut front (roof, walls overlaying cat)
-            draw_hut_front(painter, self.state)
+            try:
+                draw_hut_front(painter, self.state)
+            except Exception as e:
+                logging.debug("draw_hut_front failed: %s", e)
 
             # Dispatch by state (field sleep, walk, sit, chase, play)
-            if self.state.state == config.STATE_SLEEP:
-                if not self.state.at_home:
-                    # Field sleep — drawn by window
-                    self._draw_sleep(painter, cx, cy)
-            elif self.state.state in (config.STATE_WALK, config.STATE_WANDER, config.STATE_CHASE, config.STATE_PLAY):
-                self._draw_walk(painter, cx, cy)
-            else:  # STATE_SIT
-                self._draw_sit(painter, cx, cy)
+            try:
+                if self.state.state == config.STATE_SLEEP:
+                    if not self.state.at_home:
+                        self._draw_sleep(painter, cx, cy)
+                elif self.state.state in (config.STATE_WALK, config.STATE_WANDER, config.STATE_CHASE, config.STATE_PLAY):
+                    self._draw_walk(painter, cx, cy)
+                else:
+                    self._draw_sit(painter, cx, cy)
+            except Exception as e:
+                logging.debug("cat pose draw failed: %s", e)
 
             # 4. Draw floating hearts (on pet)
-            draw_hearts(painter, self.state)
+            try:
+                draw_hearts(painter, self.state)
+            except Exception as e:
+                logging.debug("draw_hearts failed: %s", e)
 
             # 5. Draw interactive toy (laser dot / yarn ball)
-            self._draw_toys(painter)
+            try:
+                self._draw_toys(painter)
+            except Exception as e:
+                logging.debug("_draw_toys failed: %s", e)
 
             # 6. Draw speech bubble (above cat)
-            draw_speech_bubble(painter, self.state, cx, cy, self.state.facing)
+            try:
+                draw_speech_bubble(painter, self.state, cx, cy, self.state.facing)
+            except Exception as e:
+                logging.debug("draw_speech_bubble failed: %s", e)
 
             # 7. Interact mode indicator
-            if not self.state.click_through:
-                self._draw_interact_indicator(painter)
+            try:
+                if not self.state.click_through:
+                    self._draw_interact_indicator(painter)
+            except Exception as e:
+                logging.debug("_draw_interact_indicator failed: %s", e)
 
             painter.end()
         except Exception as e:
@@ -179,151 +202,159 @@ class CatWindow(QWidget):
     # ── SIT pose ───────────────────────────────────────────────────
 
     def _draw_sit(self, painter, cx, cy):
-        from animation.breathe import breath_value
-        _, bbob = breath_value(self.state)
+        try:
+            from animation.breathe import breath_value
+            _, bbob = breath_value(self.state)
 
-        head_y = int(cy - 55 + bbob)
-        ear_scale = 1.15 if self.state.mouse_near else 1.0
+            head_y = int(cy - 55 + bbob)
+            ear_scale = 1.15 if self.state.mouse_near else 1.0
 
-        body.draw_shadow(painter, cx, cy, self.state)
-        tail.draw_tail_sit(painter, cx, cy, self.state)
-        body.draw_body_sit(painter, cx, cy, self.state)
-        legs.draw_paws(painter, cx, cy, self.state)
-        head.draw_head(painter, cx, cy, self.state, head_y)
-        head.draw_ears(painter, cx, cy, self.state, head_y, ear_scale)
-        eyes.draw_eyes(painter, cx, cy, head_y, self.state)
+            body.draw_shadow(painter, cx, cy, self.state)
+            tail.draw_tail_sit(painter, cx, cy, self.state)
+            body.draw_body_sit(painter, cx, cy, self.state)
+            legs.draw_paws(painter, cx, cy, self.state)
+            head.draw_head(painter, cx, cy, self.state, head_y)
+            head.draw_ears(painter, cx, cy, self.state, head_y, ear_scale)
+            eyes.draw_eyes(painter, cx, cy, head_y, self.state)
 
-        if self.state.reaction_type == "meow":
-            head.draw_nose(painter, cx, head_y, self.state)
-            head.draw_whiskers(painter, cx, head_y, self.state)
-        elif self.state.reaction_type == "purr":
-            eyes.draw_happy_eyes(painter, cx, head_y, self.state)
-            head.draw_nose(painter, cx, head_y, self.state)
-            head.draw_whiskers(painter, cx, head_y, self.state)
-        else:
-            head.draw_nose(painter, cx, head_y, self.state)
-            head.draw_whiskers(painter, cx, head_y, self.state)
+            if self.state.reaction_type == "meow":
+                head.draw_nose(painter, cx, head_y, self.state)
+                head.draw_whiskers(painter, cx, head_y, self.state)
+            elif self.state.reaction_type == "purr":
+                eyes.draw_happy_eyes(painter, cx, head_y, self.state)
+                head.draw_nose(painter, cx, head_y, self.state)
+                head.draw_whiskers(painter, cx, head_y, self.state)
+            else:
+                head.draw_nose(painter, cx, head_y, self.state)
+                head.draw_whiskers(painter, cx, head_y, self.state)
+        except Exception as e:
+            logging.debug("_draw_sit failed: %s", e)
 
     # ── WALK / WANDER pose ─────────────────────────────────────────
 
     def _draw_walk(self, painter, cx, cy):
-        from animation.breathe import breath_value
-        _, bbob = breath_value(self.state)
-        head_y = int(cy - 52 + bbob)
+        try:
+            from animation.breathe import breath_value
+            _, bbob = breath_value(self.state)
+            head_y = int(cy - 52 + bbob)
 
-        body.draw_shadow(painter, cx, cy, self.state)
-        tail.draw_tail_walk(painter, cx, cy, self.state)
-        body.draw_body_walk(painter, cx, cy, self.state)
-        legs.draw_legs_walk(painter, cx, cy, self.state)
-        head.draw_head(painter, cx, cy, self.state, head_y, 0.95)
-        head.draw_ears(painter, cx, cy, self.state, head_y, 0.95)
-        eyes.draw_eyes(painter, cx, cy, head_y, self.state)
-        head.draw_nose(painter, cx, head_y, self.state)
-        head.draw_whiskers(painter, cx, head_y, self.state)
+            body.draw_shadow(painter, cx, cy, self.state)
+            tail.draw_tail_walk(painter, cx, cy, self.state)
+            body.draw_body_walk(painter, cx, cy, self.state)
+            legs.draw_legs_walk(painter, cx, cy, self.state)
+            head.draw_head(painter, cx, cy, self.state, head_y, 0.95)
+            head.draw_ears(painter, cx, cy, self.state, head_y, 0.95)
+            eyes.draw_eyes(painter, cx, cy, head_y, self.state)
+            head.draw_nose(painter, cx, head_y, self.state)
+            head.draw_whiskers(painter, cx, head_y, self.state)
+        except Exception as e:
+            logging.debug("_draw_walk failed: %s", e)
 
     # ── FIELD SLEEP pose (cat sleeps anywhere on screen) ───────────
 
     def _draw_sleep(self, painter, cx, cy):
-        breath = math.sin(self.state.sleep_breath) * 0.02 + 1.0
-        painter.save()
-        painter.translate(cx, cy)
-        painter.scale(breath, breath)
-        painter.translate(-cx, -cy)
+        try:
+            breath = math.sin(self.state.sleep_breath) * 0.02 + 1.0
+            painter.save()
+            painter.translate(cx, cy)
+            painter.scale(breath, breath)
+            painter.translate(-cx, -cy)
 
-        base_r = 22 if not self.state.deep_sleep else 16
-        base_y = int(cy - 10)
+            base_r = 22 if not self.state.deep_sleep else 16
+            base_y = int(cy - 10)
 
-        # Shadow
-        sh = QPainterPath()
-        sh.addEllipse(int(cx - base_r + 2), int(base_y + 2),
-                       int(base_r * 2 - 4), 10)
-        painter.fillPath(sh, QColor(0, 0, 0, 25))
+            # Shadow
+            sh = QPainterPath()
+            sh.addEllipse(int(cx - base_r + 2), int(base_y + 2),
+                           int(base_r * 2 - 4), 10)
+            painter.fillPath(sh, QColor(0, 0, 0, 25))
 
-        # Curled body
-        curl = QPainterPath()
-        curl.addEllipse(int(cx - base_r), int(base_y - base_r),
-                        int(base_r * 2), int(base_r * 2))
-        painter.fillPath(curl, config.C_BODY)
+            # Curled body
+            curl = QPainterPath()
+            curl.addEllipse(int(cx - base_r), int(base_y - base_r),
+                            int(base_r * 2), int(base_r * 2))
+            painter.fillPath(curl, config.C_BODY)
 
-        # Inner curl (belly)
-        inner = QPainterPath()
-        inner.addEllipse(
-            int(cx - base_r * 0.5),
-            int(base_y - base_r * 0.4),
-            int(base_r * 1.0),
-            int(base_r * 0.8),
-        )
-        painter.fillPath(inner, config.C_BELLY)
+            # Inner curl (belly)
+            inner = QPainterPath()
+            inner.addEllipse(
+                int(cx - base_r * 0.5),
+                int(base_y - base_r * 0.4),
+                int(base_r * 1.0),
+                int(base_r * 0.8),
+            )
+            painter.fillPath(inner, config.C_BELLY)
 
-        # Ear poking out
-        ear = QPainterPath()
-        ex = int(cx + config.flip_x(base_r * 0.85, self.state.facing))
-        ey = int(base_y - base_r * 0.4)
-        ear.moveTo(ex, ey)
-        ear.lineTo(int(cx + config.flip_x(base_r * 1.15, self.state.facing)),
-                    int(ey - 12))
-        ear.lineTo(int(cx + config.flip_x(base_r * 0.6, self.state.facing)),
-                    int(ey - 4))
-        ear.closeSubpath()
-        painter.fillPath(ear, config.C_BODY)
+            # Ear poking out
+            ear = QPainterPath()
+            ex = int(cx + config.flip_x(base_r * 0.85, self.state.facing))
+            ey = int(base_y - base_r * 0.4)
+            ear.moveTo(ex, ey)
+            ear.lineTo(int(cx + config.flip_x(base_r * 1.15, self.state.facing)),
+                        int(ey - 12))
+            ear.lineTo(int(cx + config.flip_x(base_r * 0.6, self.state.facing)),
+                        int(ey - 4))
+            ear.closeSubpath()
+            painter.fillPath(ear, config.C_BODY)
 
-        # Closed eye
-        nlx = int(cx + config.flip_x(base_r * 0.2, self.state.facing))
-        nly = int(base_y - base_r * 0.1)
-        sleep_eye = QPainterPath()
-        sleep_eye.moveTo(nlx - 3, nly)
-        sleep_eye.cubicTo(nlx - 1, nly + 1, nlx + 1, nly + 1, nlx + 3, nly)
-        painter.strokePath(sleep_eye, QPen(config.C_CLOSED_EYE, 1.5))
+            # Closed eye
+            nlx = int(cx + config.flip_x(base_r * 0.2, self.state.facing))
+            nly = int(base_y - base_r * 0.1)
+            sleep_eye = QPainterPath()
+            sleep_eye.moveTo(nlx - 3, nly)
+            sleep_eye.cubicTo(nlx - 1, nly + 1, nlx + 1, nly + 1, nlx + 3, nly)
+            painter.strokePath(sleep_eye, QPen(config.C_CLOSED_EYE, 1.5))
 
-        # Nose dot
-        n2 = QPainterPath()
-        nlx2 = int(cx + config.flip_x(2, self.state.facing))
-        nly2 = int(base_y - base_r * 0.1 + 2)
-        n2.addEllipse(nlx2 - 1, nly2 - 1, 3, 2)
-        painter.fillPath(n2, config.C_NOSE)
+            # Nose dot
+            n2 = QPainterPath()
+            nlx2 = int(cx + config.flip_x(2, self.state.facing))
+            nly2 = int(base_y - base_r * 0.1 + 2)
+            n2.addEllipse(nlx2 - 1, nly2 - 1, 3, 2)
+            painter.fillPath(n2, config.C_NOSE)
 
-        # Tail curled around
-        tail.draw_tail_sleep(painter, cx, cy, self.state, base_r, base_y)
+            # Tail curled around
+            tail.draw_tail_sleep(painter, cx, cy, self.state, base_r, base_y)
 
-        # Zzz particles
-        for p in self.state.zzz_particles:
-            z = QPainterPath()
-            zx = int(cx + config.flip_x(p[0], self.state.facing))
-            zy = int(base_y - base_r + p[1] - 10)
-            zsize = int(6 + p[3] * 2)
-            z.addText(zx, zy, QFont("Arial", zsize), "z")
-            painter.fillPath(z, config.C_ZZZ)
+            # Zzz particles
+            for p in self.state.zzz_particles:
+                z = QPainterPath()
+                zx = int(cx + config.flip_x(p[0], self.state.facing))
+                zy = int(base_y - base_r + p[1] - 10)
+                zsize = int(6 + p[3] * 2)
+                z.addText(zx, zy, QFont("Arial", zsize), "z")
+                painter.fillPath(z, config.C_ZZZ)
 
-        painter.restore()
+            painter.restore()
+        except Exception as e:
+            logging.debug("_draw_sleep failed: %s", e)
 
     # ── Toy drawing (laser dot / yarn ball) ──────────────────────
 
     def _draw_toys(self, painter):
         """Draw the laser pointer dot or yarn ball toy."""
-        s = self.state
-        if not s.toy_active or s.toy_target is None:
-            return
+        try:
+            s = self.state
+            if not s.toy_active or s.toy_target is None:
+                return
 
-        tx, ty = s.toy_target
+            tx, ty = s.toy_target
 
-        if s.toy_type == "laser":
-            # Small red dot at cursor position
-            painter.setBrush(QColor(255, 60, 60, 220))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(int(tx - 3), int(ty - 3), 6, 6)
+            if s.toy_type == "laser":
+                painter.setBrush(QColor(255, 60, 60, 220))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawEllipse(int(tx - 3), int(ty - 3), 6, 6)
 
-            # Subtle glow ring
-            painter.setBrush(QColor(255, 60, 60, 40))
-            painter.drawEllipse(int(tx - 6), int(ty - 6), 12, 12)
+                painter.setBrush(QColor(255, 60, 60, 40))
+                painter.drawEllipse(int(tx - 6), int(ty - 6), 12, 12)
 
-        elif s.toy_type == "ball":
-            # Colored circle (yarn ball)
-            alpha = 220
-            painter.setBrush(QColor(255, 120, 180, alpha))
-            painter.setPen(QPen(QColor(200, 80, 140, alpha), 1.5))
-            painter.drawEllipse(int(tx - 8), int(ty - 8), 16, 16)
+            elif s.toy_type == "ball":
+                alpha = 220
+                painter.setBrush(QColor(255, 120, 180, alpha))
+                painter.setPen(QPen(QColor(200, 80, 140, alpha), 1.5))
+                painter.drawEllipse(int(tx - 8), int(ty - 8), 16, 16)
 
-            # Inner highlight
-            painter.setBrush(QColor(255, 180, 210, 120))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(int(tx - 3), int(ty - 3), 6, 6)
+                painter.setBrush(QColor(255, 180, 210, 120))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawEllipse(int(tx - 3), int(ty - 3), 6, 6)
+        except Exception as e:
+            logging.debug("_draw_toys failed: %s", e)
